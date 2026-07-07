@@ -5,7 +5,7 @@
 */
 
 use dygpi::plugin::PluginRegistrar;
-use news_api::{afp_format, NewsAgencyPlugin};
+use news_api::{afp_format, NewsAgencyPlugin, PluginModuleType};
 
 // ------------------------------------------------------------------------------------------------
 // 注册
@@ -14,8 +14,11 @@ use news_api::{afp_format, NewsAgencyPlugin};
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
     registrar.register(
-        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
-            .with_ui("afp-plugin-ui", "afp_plugin/ui.js"),
+        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format).with_ui(
+            PluginModuleType::React,
+            "react",
+            "afp_plugin/ui/panel.js",
+        ),
     );
 }
 

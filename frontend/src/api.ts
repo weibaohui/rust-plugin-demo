@@ -12,6 +12,7 @@ export interface PluginInfo {
   id: string;
   agency: string;
   has_ui: boolean;
+  module_type: string | null;
   ui_tag_name: string | null;
   ui_js_path: string | null;
 }
@@ -19,6 +20,7 @@ export interface PluginInfo {
 export interface PluginUiInfo {
   tag_name: string;
   js_url: string;
+  module_type: string;
 }
 
 export async function getPluginUi(id: string): Promise<PluginUiInfo> {

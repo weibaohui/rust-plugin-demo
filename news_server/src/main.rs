@@ -48,6 +48,7 @@ struct PluginInfo {
     id: String,
     agency: String,
     has_ui: bool,
+    module_type: Option<String>,
     ui_tag_name: Option<String>,
     ui_js_path: Option<String>,
 }
@@ -56,6 +57,7 @@ struct PluginInfo {
 struct PluginUiInfo {
     tag_name: String,
     js_url: String,
+    module_type: String,
 }
 
 #[derive(Serialize)]
@@ -150,7 +152,7 @@ async fn main() {
         // 批量操作
         .route("/api/plugins", delete(unload_all_handler))
         // 插件前端 UI 静态文件
-        .route("/static/plugins/*path", get(serve_plugin_ui_handler))
+        .route("/plugin-files/*path", get(serve_plugin_ui_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -317,6 +319,7 @@ async fn load_library_handler(
                 id: p.plugin_id().clone(),
                 agency: p.agency_name().to_string(),
                 has_ui: p.ui_tag_name().is_some(),
+                module_type: p.module_type().map(|mt| format!("{:?}", mt).to_lowercase()),
                 ui_tag_name: p.ui_tag_name().map(|s| s.to_string()),
                 ui_js_path: p.ui_js_path().map(|s| s.to_string()),
             })
@@ -343,6 +346,7 @@ async fn list_plugins_handler(State(state): State<SharedState>) -> Json<Vec<Plug
                 id: p.plugin_id().clone(),
                 agency: p.agency_name().to_string(),
                 has_ui: p.ui_tag_name().is_some(),
+                module_type: p.module_type().map(|mt| format!("{:?}", mt).to_lowercase()),
                 ui_tag_name: p.ui_tag_name().map(|s| s.to_string()),
                 ui_js_path: p.ui_js_path().map(|s| s.to_string()),
             })
@@ -372,6 +376,9 @@ async fn get_plugin_handler(
         id: plugin.plugin_id().clone(),
         agency: plugin.agency_name().to_string(),
         has_ui: plugin.ui_tag_name().is_some(),
+        module_type: plugin
+            .module_type()
+            .map(|mt| format!("{:?}", mt).to_lowercase()),
         ui_tag_name: plugin.ui_tag_name().map(|s| s.to_string()),
         ui_js_path: plugin.ui_js_path().map(|s| s.to_string()),
     }))
@@ -504,10 +511,15 @@ async fn plugin_ui_handler(
         .to_string();
 
     let js_path = plugin.ui_js_path().unwrap_or("").to_string();
+    let module_type = plugin
+        .module_type()
+        .map(|mt| format!("{:?}", mt).to_lowercase())
+        .unwrap_or_else(|| "web-component".to_string());
 
     Ok(Json(PluginUiInfo {
         tag_name,
-        js_url: format!("/static/plugins/{}", js_path),
+        js_url: format!("/plugin-files/{}", js_path),
+        module_type,
     }))
 }
 
@@ -527,7 +539,7 @@ async fn serve_plugin_ui_handler(
             }),
         )
     })?;
-    let exe_dir = exe_path
+    let project_root = exe_path
         .parent() // debug/
         .and_then(|p| p.parent()) // target/
         .and_then(|p| p.parent()) // 项目根
@@ -540,11 +552,12 @@ async fn serve_plugin_ui_handler(
             )
         })?;
 
-    let base = exe_dir.join("plugins_ui");
-    let file_path = base.join(&path);
+    // 从项目根直接读取文件，例如 /plugin-files/reuters_plugin/ui/panel.js
+    // 对应 {project_root}/reuters_plugin/ui/panel.js
+    let file_path = project_root.join(&path);
 
     // 防止路径穿越攻击
-    if !file_path.starts_with(&base) {
+    if !file_path.starts_with(&project_root) {
         return Err((
             StatusCode::FORBIDDEN,
             Json(ApiMessage {

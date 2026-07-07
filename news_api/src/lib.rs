@@ -14,6 +14,17 @@ use dygpi::plugin::Plugin;
 // ------------------------------------------------------------------------------------------------
 
 ///
+/// 插件前端 UI 模块类型。
+///
+#[derive(Debug, Clone, PartialEq)]
+pub enum PluginModuleType {
+    /// 传统 Web Component（通过 `<script>` 加载，`customElements.define()`）。
+    WebComponent,
+    /// React ESM 模块（通过 `import()` 加载，导出 `mount(container, deps)`）。
+    React,
+}
+
+///
 /// 由插件的 `publish` 方法产生的新闻文章。
 ///
 #[derive(Debug, Clone)]
@@ -60,9 +71,11 @@ pub struct NewsAgencyPlugin {
     id: String,
     agency_name: String,
     format_fn: fn(ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArticle,
-    /// 自定义 HTML 标签名（Web Component），用于在主框架中渲染插件专属 UI
+    /// 前端 UI 模块类型（React ESM 或 Web Component）
+    module_type: Option<PluginModuleType>,
+    /// 自定义 HTML 标签名（Web Component）或组件标识名
     ui_tag_name: Option<String>,
-    /// 插件 UI 的 JS 文件路径（相对于 static 目录）
+    /// 插件 UI 的 JS 文件路径，相对于项目根目录（如 `"reuters_plugin/ui/panel.js"`）
     ui_js_path: Option<String>,
 }
 
@@ -104,6 +117,7 @@ impl NewsAgencyPlugin {
             id: id.to_string(),
             agency_name: agency_name.to_string(),
             format_fn,
+            module_type: None,
             ui_tag_name: None,
             ui_js_path: None,
         }
@@ -112,21 +126,28 @@ impl NewsAgencyPlugin {
     ///
     /// 设置插件 UI 元数据并返回自身（builder 风格）。
     ///
-    /// * `tag_name` — 自定义 HTML 标签名，例如 `"reuters-plugin-ui"`。
-    /// * `js_path` — JS 文件路径（相对于 `/static/plugins/`），例如 `"reuters_plugin/ui.js"`。
+    /// * `module_type` — 前端 UI 模块类型（`React` 或 `WebComponent`）。
+    /// * `tag_name` — 组件标识，React 插件用 `"react"`，Web Component 用自定义标签名。
+    /// * `js_path` — JS 文件路径，相对于项目根目录，如 `"reuters_plugin/ui/panel.js"`。
     ///
-    pub fn with_ui(mut self, tag_name: &str, js_path: &str) -> Self {
+    pub fn with_ui(mut self, module_type: PluginModuleType, tag_name: &str, js_path: &str) -> Self {
+        self.module_type = Some(module_type);
         self.ui_tag_name = Some(tag_name.to_string());
         self.ui_js_path = Some(js_path.to_string());
         self
     }
 
-    /// 返回插件前端 UI 的自定义 HTML 标签名（若有）。
+    /// 返回前端 UI 模块类型（若有）。
+    pub fn module_type(&self) -> Option<&PluginModuleType> {
+        self.module_type.as_ref()
+    }
+
+    /// 返回插件前端 UI 的组件标识（HTML 标签名或标识名）。
     pub fn ui_tag_name(&self) -> Option<&str> {
         self.ui_tag_name.as_deref()
     }
 
-    /// 返回插件前端 UI 的 JS 文件路径（若有）。
+    /// 返回插件前端 UI 的 JS 文件路径，相对于项目根目录。
     pub fn ui_js_path(&self) -> Option<&str> {
         self.ui_js_path.as_deref()
     }
