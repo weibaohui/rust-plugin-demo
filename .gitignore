@@ -16,3 +16,5 @@ Cargo.lock
 ## ------------------------------------------------------------------------------------------------
 # Files required for CI integration (Travis)
 /ci
+frontend/node_modules/
+frontend/dist/
