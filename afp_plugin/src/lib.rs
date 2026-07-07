@@ -13,11 +13,10 @@ use news_api::{afp_format, NewsAgencyPlugin};
 
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
-    registrar.register(NewsAgencyPlugin::new(
-        PLUGIN_ID,
-        "Agence France-Presse",
-        afp_format,
-    ));
+    registrar.register(
+        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
+            .with_ui("afp-plugin-ui", "afp_plugin/ui.js"),
+    );
 }
 
 // ------------------------------------------------------------------------------------------------

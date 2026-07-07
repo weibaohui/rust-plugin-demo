@@ -13,7 +13,10 @@ use news_api::{reuters_format, NewsAgencyPlugin};
 
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
-    registrar.register(NewsAgencyPlugin::new(PLUGIN_ID, "Reuters", reuters_format));
+    registrar.register(
+        NewsAgencyPlugin::new(PLUGIN_ID, "Reuters", reuters_format)
+            .with_ui("reuters-plugin-ui", "reuters_plugin/ui.js"),
+    );
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -11,6 +11,20 @@ export interface LibraryInfo {
 export interface PluginInfo {
   id: string;
   agency: string;
+  has_ui: boolean;
+  ui_tag_name: string | null;
+  ui_js_path: string | null;
+}
+
+export interface PluginUiInfo {
+  tag_name: string;
+  js_url: string;
+}
+
+export async function getPluginUi(id: string): Promise<PluginUiInfo> {
+  const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/ui`);
+  if (!res.ok) throw new Error('该插件没有关联的 UI');
+  return res.json();
 }
 
 export interface ArticleResponse {

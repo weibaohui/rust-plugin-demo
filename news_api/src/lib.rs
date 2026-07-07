@@ -60,6 +60,10 @@ pub struct NewsAgencyPlugin {
     id: String,
     agency_name: String,
     format_fn: fn(ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArticle,
+    /// 自定义 HTML 标签名（Web Component），用于在主框架中渲染插件专属 UI
+    ui_tag_name: Option<String>,
+    /// 插件 UI 的 JS 文件路径（相对于 static 目录）
+    ui_js_path: Option<String>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -100,7 +104,31 @@ impl NewsAgencyPlugin {
             id: id.to_string(),
             agency_name: agency_name.to_string(),
             format_fn,
+            ui_tag_name: None,
+            ui_js_path: None,
         }
+    }
+
+    ///
+    /// 设置插件 UI 元数据并返回自身（builder 风格）。
+    ///
+    /// * `tag_name` — 自定义 HTML 标签名，例如 `"reuters-plugin-ui"`。
+    /// * `js_path` — JS 文件路径（相对于 `/static/plugins/`），例如 `"reuters_plugin/ui.js"`。
+    ///
+    pub fn with_ui(mut self, tag_name: &str, js_path: &str) -> Self {
+        self.ui_tag_name = Some(tag_name.to_string());
+        self.ui_js_path = Some(js_path.to_string());
+        self
+    }
+
+    /// 返回插件前端 UI 的自定义 HTML 标签名（若有）。
+    pub fn ui_tag_name(&self) -> Option<&str> {
+        self.ui_tag_name.as_deref()
+    }
+
+    /// 返回插件前端 UI 的 JS 文件路径（若有）。
+    pub fn ui_js_path(&self) -> Option<&str> {
+        self.ui_js_path.as_deref()
     }
 
     /// 返回人类可读的机构名称。

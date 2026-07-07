@@ -1,6 +1,7 @@
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::StatusCode,
+    http::{Response, StatusCode},
     routing::{delete, get, post},
     Json, Router,
 };
@@ -46,6 +47,15 @@ struct LibraryInfo {
 struct PluginInfo {
     id: String,
     agency: String,
+    has_ui: bool,
+    ui_tag_name: Option<String>,
+    ui_js_path: Option<String>,
+}
+
+#[derive(Serialize)]
+struct PluginUiInfo {
+    tag_name: String,
+    js_url: String,
 }
 
 #[derive(Serialize)]
@@ -136,8 +146,11 @@ async fn main() {
             get(get_plugin_handler).delete(unload_plugin_handler),
         )
         .route("/api/plugins/:id/publish", post(publish_handler))
+        .route("/api/plugins/:id/ui", get(plugin_ui_handler))
         // 批量操作
         .route("/api/plugins", delete(unload_all_handler))
+        // 插件前端 UI 静态文件
+        .route("/static/plugins/*path", get(serve_plugin_ui_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -303,6 +316,9 @@ async fn load_library_handler(
             ctx.manager.get(id).map(|p| PluginInfo {
                 id: p.plugin_id().clone(),
                 agency: p.agency_name().to_string(),
+                has_ui: p.ui_tag_name().is_some(),
+                ui_tag_name: p.ui_tag_name().map(|s| s.to_string()),
+                ui_js_path: p.ui_js_path().map(|s| s.to_string()),
             })
         })
         .collect();
@@ -326,6 +342,9 @@ async fn list_plugins_handler(State(state): State<SharedState>) -> Json<Vec<Plug
             .map(|p| PluginInfo {
                 id: p.plugin_id().clone(),
                 agency: p.agency_name().to_string(),
+                has_ui: p.ui_tag_name().is_some(),
+                ui_tag_name: p.ui_tag_name().map(|s| s.to_string()),
+                ui_js_path: p.ui_js_path().map(|s| s.to_string()),
             })
             .collect(),
     )
@@ -352,6 +371,9 @@ async fn get_plugin_handler(
     Ok(Json(PluginInfo {
         id: plugin.plugin_id().clone(),
         agency: plugin.agency_name().to_string(),
+        has_ui: plugin.ui_tag_name().is_some(),
+        ui_tag_name: plugin.ui_tag_name().map(|s| s.to_string()),
+        ui_js_path: plugin.ui_js_path().map(|s| s.to_string()),
     }))
 }
 
@@ -449,4 +471,112 @@ async fn unload_all_handler(State(state): State<SharedState>) -> Json<ApiMessage
     Json(ApiMessage {
         message: "所有插件已卸载".to_string(),
     })
+}
+
+// ------------------------------------------------------------------------------------------------
+// 获取插件 UI 元数据
+// ------------------------------------------------------------------------------------------------
+
+async fn plugin_ui_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<PluginUiInfo>, (StatusCode, Json<ApiMessage>)> {
+    let ctx = state.read().unwrap();
+    let plugin = ctx.manager.get(&id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiMessage {
+                message: format!("未找到插件 '{}'", id),
+            }),
+        )
+    })?;
+
+    let tag_name = plugin
+        .ui_tag_name()
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                Json(ApiMessage {
+                    message: format!("插件 '{}' 没有关联的 UI", id),
+                }),
+            )
+        })?
+        .to_string();
+
+    let js_path = plugin.ui_js_path().unwrap_or("").to_string();
+
+    Ok(Json(PluginUiInfo {
+        tag_name,
+        js_url: format!("/static/plugins/{}", js_path),
+    }))
+}
+
+// ------------------------------------------------------------------------------------------------
+// 服务插件前端 UI 静态文件
+// ------------------------------------------------------------------------------------------------
+
+async fn serve_plugin_ui_handler(
+    Path(path): Path<String>,
+) -> Result<Response<Body>, (StatusCode, Json<ApiMessage>)> {
+    // 基于可执行文件路径推断项目根，避免 CWD 依赖
+    let exe_path = std::env::current_exe().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: "Cannot determine executable path".to_string(),
+            }),
+        )
+    })?;
+    let exe_dir = exe_path
+        .parent() // debug/
+        .and_then(|p| p.parent()) // target/
+        .and_then(|p| p.parent()) // 项目根
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: "Cannot determine project root".to_string(),
+                }),
+            )
+        })?;
+
+    let base = exe_dir.join("plugins_ui");
+    let file_path = base.join(&path);
+
+    // 防止路径穿越攻击
+    if !file_path.starts_with(&base) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiMessage {
+                message: "Forbidden".to_string(),
+            }),
+        ));
+    }
+
+    let content = tokio::fs::read_to_string(&file_path).await.map_err(|_| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiMessage {
+                message: format!("Plugin UI file not found: {}", path),
+            }),
+        )
+    })?;
+
+    // 根据扩展名设置 Content-Type
+    let content_type = if path.ends_with(".js") {
+        "application/javascript; charset=utf-8"
+    } else if path.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if path.ends_with(".html") {
+        "text/html; charset=utf-8"
+    } else {
+        "application/octet-stream"
+    };
+
+    let response = Response::builder()
+        .header("Content-Type", content_type)
+        .body(Body::from(content))
+        .unwrap();
+
+    Ok(response)
 }

@@ -4,11 +4,12 @@ import './App.css';
 import Navbar from './components/Navbar';
 import LibraryList from './components/LibraryList';
 import PluginList from './components/PluginList';
+import PluginUi from './components/PluginUi';
 import PublishForm from './components/PublishForm';
 import type { PluginInfo, LibraryInfo, ArticleResponse } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, publishArticle } from './api';
 
-type Tab = 'plugins' | 'libraries' | 'publish';
+type Tab = 'plugins' | 'libraries' | 'publish' | 'ui';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('plugins');
@@ -120,6 +121,7 @@ export default function App() {
   const tabs: { key: Tab; label: string; icon: ReactNode }[] = [
     { key: 'plugins', label: '已加载插件', icon: '🔌' },
     { key: 'libraries', label: '插件库管理', icon: '📦' },
+    { key: 'ui', label: '插件界面', icon: '🎨' },
     { key: 'publish', label: '发布新闻', icon: '📰' },
   ];
 
@@ -163,6 +165,10 @@ export default function App() {
             onPublish={handlePublish}
             onRefreshPlugins={refreshPlugins}
           />
+        )}
+
+        {activeTab === 'ui' && (
+          <PluginUi plugins={plugins} />
         )}
       </main>
 
