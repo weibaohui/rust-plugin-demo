@@ -1,0 +1,9 @@
+[package]
+name = "news_host"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+dygpi = { version = "0.1", path = ".." }
+news_api = { version = "0.1", path = "../news_api" }
+pretty_env_logger = "0.5"

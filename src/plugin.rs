@@ -1,9 +1,9 @@
 /*!
-The components required to define a plugin API.
+定义插件 API 所需的组件。
 
-The types defined in this module are required in defining the plugin API, the
+该模块中定义的类型是定义插件 API 所必需的。
 
-# Example - Define Plugin
+# 示例 - 定义插件
 
 ```rust
 use dygpi::plugin::Plugin;
@@ -23,14 +23,14 @@ impl Plugin for SoundEffectPlugin {
     }
 
     fn on_load(&self) -> dygpi::error::Result<()> {
-        // connect to sound engine
-        // load media stream
+        // 连接到音频引擎
+        // 加载媒体流
         Ok(())
     }
 
     fn on_unload(&self) -> dygpi::error::Result<()> {
-        // unload media stream
-        // disconnect from sound engine
+        // 卸载媒体流
+        // 断开音频引擎连接
         Ok(())
     }
 }
@@ -41,7 +41,7 @@ impl SoundEffectPlugin {
 }
 ```
 
-# Example - Register Plugin
+# 示例 - 注册插件
 
 ```rust
 use dygpi::plugin::PluginRegistrar;
@@ -86,16 +86,16 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 // ------------------------------------------------------------------------------------------------
-// Public Types
+// 公开类型
 // ------------------------------------------------------------------------------------------------
 
 ///
-/// This trait must be implemented by any plugin type, it not only provides a plugin id, but also
-/// provides lifecycle methods which implementors can use to manage resources owned by the plugin.
+/// 任何插件类型都必须实现此 trait。它不仅提供插件 ID，还提供了实现者可用来管理
+/// 插件所拥有资源的生命周期方法。
 pub trait Plugin: Any + Debug + Sync + Send {
     ///
-    /// Return the plug-in identifier for this instance. In general a unique format that also
-    /// provides some debug/trace value is to use the package/module path as shown below.
+    /// 返回此实例的插件标识符。通常一种既唯一又具有调试/跟踪价值的格式是使用
+    /// 包/模块路径，如下所示。
     ///
     /// ```rust
     /// const PLUGIN_ID: &str = concat!(env!("CARGO_PKG_NAME"), "::", module_path!(), "::MyPlugin");
@@ -103,21 +103,19 @@ pub trait Plugin: Any + Debug + Sync + Send {
     fn plugin_id(&self) -> &String;
 
     ///
-    /// Called by the plugin manager after the registration process is complete.
+    /// 由插件管理器在注册过程完成后调用。
     ///
     fn on_load(&self) -> Result<()>;
 
     ///
-    /// Called by the plugin manager once a plugin has been de-registered but before the library
-    /// is closed.
+    /// 由插件管理器在插件被注销后、库关闭前调用。
     ///
     fn on_unload(&self) -> Result<()>;
 }
 
 ///
-/// The type for the registration function that a plugin provider **MUST** include in their
-/// library. This function constructs plugin instances and uses the registrar as a callback
-/// into the plugin manager.
+/// 插件提供者**必须**在其库中包含的注册函数类型。
+/// 该函数构造插件实例，并使用注册器作为回调将插件注册到插件管理器。
 ///
 /// ```rust
 /// use dygpi::plugin::PluginRegistrar;
@@ -152,14 +150,12 @@ pub trait Plugin: Any + Debug + Sync + Send {
 pub type PluginRegistrationFn<T> = fn(registrar: &mut PluginRegistrar<T>);
 
 ///
-/// The required name of the registration function (see the
-/// [`PluginRegistrationFn`](type.PluginRegistrationFn.html) type).
+/// 注册函数的必需名称（参见 [`PluginRegistrationFn`](type.PluginRegistrationFn.html) 类型）。
 ///
 pub const PLUGIN_REGISTRATION_FN_NAME: &[u8] = b"register_plugins\0";
 
 ///
-/// A registrar is created by a plugin manager and provided to the library's registration
-/// function to register any plugins it has.
+/// 注册器由插件管理器创建，并提供给库的注册函数，用于注册其拥有的插件。
 ///
 #[derive(Debug)]
 pub struct PluginRegistrar<T>
@@ -171,7 +167,7 @@ where
 }
 
 // ------------------------------------------------------------------------------------------------
-// Public Functions
+// 公开函数
 // ------------------------------------------------------------------------------------------------
 
 pub(crate) type CompatibilityFn = fn() -> u64;
@@ -179,8 +175,7 @@ pub(crate) type CompatibilityFn = fn() -> u64;
 pub(crate) const COMPATIBILITY_FN_NAME: &[u8] = b"compatibility_hash\0";
 
 ///
-/// This function is exposed so that the version linked into a plugin provider may be compared to
-/// the one linked into the plugin host.
+/// 此函数被暴露出来，以便插件提供者中链接的版本可以与插件宿主中的版本进行比较。
 ///
 #[allow(unsafe_code)]
 #[no_mangle]
@@ -200,7 +195,7 @@ pub extern "C" fn compatibility_hash() -> u64 {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Implementations
+// 实现
 // ------------------------------------------------------------------------------------------------
 
 impl<T> PluginRegistrar<T>
@@ -215,9 +210,8 @@ where
     }
 
     ///
-    /// Register a plugin, this will store the plugin in the registrar until the registration is
-    /// completed. After the registration function completes, the plugin manager will add all
-    /// plugins, if no errors were reported.
+    /// 注册一个插件，将其存储在注册器中，直到注册完成。
+    /// 注册函数执行完毕后，如果没有报告错误，插件管理器将添加所有插件。
     ///
     pub fn register(&mut self, plugin: T) {
         if self.error.is_none() {
@@ -226,8 +220,7 @@ where
     }
 
     ///
-    /// Inform the registrar of an error, note that if multiple are recorded only the last will
-    /// propagate out of the plugin manager.
+    /// 向注册器报告错误；注意如果记录了多个错误，只有最后一个会传播到插件管理器。
     ///
     pub fn error(&mut self, error: Box<dyn std::error::Error>) {
         self.error = Some(error);

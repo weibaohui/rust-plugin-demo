@@ -1,35 +1,28 @@
 /*!
-Provides support for _Dynamic Generic PlugIns_, library based plugins for Rust.
+为 Rust 提供 _动态通用插件_（Dynamic Generic PlugIns）支持，基于动态库的插件机制。
 
-This crate implements a simple plugin model that allows for loading of implementations from
-external dynamic libraries at runtime.
+该 crate 实现了一个简单的插件模型，允许在运行时从外部动态库加载实现。
 
-1. The plugin _host_ defines a concrete type, the plugin _type_.
-   1. The plugin _type_ **MUST** implement the trait [`Plugin`](plugin/trait.Plugin.html).
-   1. It **MAY** be preferable to define the plugin _type_ in a separate plugin _API_ crate
-      that both the _host_ and _provider_ depend upon.
-1. The plugin _provider_ (or _library_) crate **MUST** set crate-type to `"dylib"` and `"rlib"` in
-   their cargo configuration.
-1. The plugin _provider_ **MUST** implement a function, named `register_plugins`, which is passed a
-   registrar object to register any instances of the plugin _type_.
-   1. A plugin _provider_ can use an alternate name for the registration function but this must be
-      provided to the plugin manager via the
+1. 插件 _宿主_ 定义一个具体类型，即插件 _类型_。
+   1. 插件 _类型_ **必须** 实现 [`Plugin`](plugin/trait.Plugin.html) trait。
+   1. **建议**将插件 _类型_ 定义在一个单独的插件 _API_ crate 中，宿主和提供者都依赖它。
+1. 插件 _提供者_（或 _库_）crate **必须**在 Cargo 配置中将 crate-type 设为 `"dylib"` 和 `"rlib"`。
+1. 插件 _提供者_ **必须**实现一个名为 `register_plugins` 的函数，该函数接收一个
+   注册器（registrar）对象，用于注册插件 _类型_ 的任何实例。
+   1. 插件 _提供者_ 可以使用替代的注册函数名称，但必须通过
       [`set_registration_fn_name`](manager/struct.PluginManager.html#method.set_registration_fn_name)
-      method.
-1. The plugin _host_ then uses the [`PluginManager`](manager/struct.PluginManager.html) to load libraries,
-   and register plugins, that have the same type as the plugin _type_.
-1. The plugin _host_ **MAY** then use plugin manager's [`get`](manager/struct.PluginManager.html#method.get)
-    method to fetch a specific plugin by _id_, **OR** use
-   plugin manager's [`plugins`](manager/struct.PluginManager.html#method.plugins) method to iterate
-   over all plugins.
+      方法告知插件管理器。
+1. 插件 _宿主_ 然后使用 [`PluginManager`](manager/struct.PluginManager.html) 来加载库
+   并注册与插件 _类型_ 相同类型的插件。
+1. 插件 _宿主_ 可以使用插件管理器的 [`get`](manager/struct.PluginManager.html#method.get)
+   方法按 _id_ 获取特定插件，**或**使用
+   插件管理器的 [`plugins`](manager/struct.PluginManager.html#method.plugins) 方法遍历所有插件。
 
-Overriding the plugin registration function allows a plugin _host_ to provide plugins of different
-types by using separate registration functions for each type.
+重写插件注册函数允许插件 _宿主_ 通过为每种类型使用单独的注册函数，来提供不同类型的插件。
 
-# Example
+# 示例
 
-The example below shows the plugin manager loading any plugins from a specific library and then
-retrieving a single plugin by ID from the loaded set.
+下面的示例展示了插件管理器从特定库加载插件，然后从已加载的集合中按 ID 检索单个插件。
 
 ```rust,no_run
 use dygpi::manager::PluginManager;
@@ -66,11 +59,10 @@ fn main() {
 }
 ```
 
-# Features
+# 特性
 
-`config_serde`: Adds [Serde](https://serde.rs/)'s `Serialize` and `Deserialize` traits to the
-[`PluginManagerConfiguration`](config/struct.PluginManagerConfiguration.html) type so that it can
-be used in configuration files.
+`config_serde`：为 [`PluginManagerConfiguration`](config/struct.PluginManagerConfiguration.html) 类型
+添加 [Serde](https://serde.rs/) 的 `Serialize` 和 `Deserialize` trait，使其可用于配置文件。
 
 ```toml
 [plugins]
@@ -81,19 +73,19 @@ effect = ["delay", "reverb"]
 */
 
 #![warn(
-    // ---------- Stylistic
+    // ---------- 代码风格
     future_incompatible,
     nonstandard_style,
     rust_2018_idioms,
     trivial_casts,
     trivial_numeric_casts,
-    // ---------- Public
+    // ---------- 公开 API
     missing_debug_implementations,
     missing_docs,
     unreachable_pub,
-    // ---------- Unsafe
+    // ---------- 不安全代码
     unsafe_code,
-    // ---------- Unused
+    // ---------- 未使用的
     unused_extern_crates,
     unused_import_braces,
     unused_qualifications,
@@ -104,7 +96,7 @@ effect = ["delay", "reverb"]
 extern crate log;
 
 // ------------------------------------------------------------------------------------------------
-// Modules
+// 模块
 // ------------------------------------------------------------------------------------------------
 
 pub mod config;

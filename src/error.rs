@@ -1,65 +1,64 @@
 /*!
-Provides the [`Error`](struct.Error.html), [`ErrorKind`](enum.ErrorKind.html), and
-[`Result`](enum.Result.html) type used in the rest of this crate.
+提供该 crate 中使用的 [`Error`](struct.Error.html)、[`ErrorKind`](enum.ErrorKind.html) 和
+[`Result`](enum.Result.html) 类型。
 */
 
 use std::fmt::{Display, Formatter};
 
 // ------------------------------------------------------------------------------------------------
-// Public Types
+// 公开类型
 // ------------------------------------------------------------------------------------------------
 
 ///
-/// Errors returned by functions and methods in this crate.
+/// 该 crate 中函数和方法返回的错误类型。
 ///
 #[derive(Debug)]
 pub enum ErrorKind {
     ///
-    /// Failed to load the dynamic library specified by file name.
-    /// The first parameter is the library path, the second is the underlying system error.
+    /// 加载指定文件名的动态库失败。
+    /// 第一个参数是库路径，第二个参数是底层系统错误。
     ///
     LibraryOpenFailed(String, Box<dyn std::error::Error>),
     ///
-    /// Failed to close the dynamic library and free any resources.
-    /// The first parameter is the library path, the second is the underlying system error.
+    /// 关闭动态库并释放资源失败。
+    /// 第一个参数是库路径，第二个参数是底层系统错误。
     ///
     LibraryCloseFailed(String, Box<dyn std::error::Error>),
     ///
-    /// Failed to find the symbol within the dynamic library.
-    /// The first parameter is the library path, the second is the underlying system error.
+    /// 在动态库中查找符号失败。
+    /// 第一个参数是库路径，第二个参数是底层系统错误。
     ///
     SymbolNotFound(String, Box<dyn std::error::Error>),
     ///
-    /// The plugin host and plugin library are incompatible.
-    /// The parameter contains the path of the incompatible library.
+    /// 插件宿主与插件库版本不兼容。
+    /// 参数为不兼容的库路径。
     ///
     IncompatibleLibraryVersion(String),
     ///
-    /// An error was reported by the plugin library when attempting to register a plugin.
-    /// The parameter is the error the plugin library provided to the registrar.
+    /// 尝试注册插件时，插件库报告了错误。
+    /// 参数为插件库提供给注册器的错误。
     ///
     PluginRegistration(Box<dyn std::error::Error>),
     ///
-    /// The plugin manager type is not known in the configuration.
-    /// The parameter is the plugin type identifier that could not be found.
+    /// 配置中找不到指定的插件管理器类型。
+    /// 参数为未找到的插件类型标识符。
     ///
     UnknownPluginManagerType(String),
 }
 
 ///
-/// An implementation of `std::error::Error` using [`ErrorKind`](enum.ErrorKind.html).
+/// 使用 [`ErrorKind`](enum.ErrorKind.html) 的 `std::error::Error` 实现。
 ///
 #[derive(Debug)]
 pub struct Error(ErrorKind);
 
 ///
-/// `std::result::Result` constrained to always return the [`Error`](struct.Error.html)
-/// type from this crate.
+/// `std::result::Result` 的别名，始终返回该 crate 的 [`Error`](struct.Error.html) 类型。
 ///
 pub type Result<T> = std::result::Result<T, Error>;
 
 // ------------------------------------------------------------------------------------------------
-// Implementations
+// 实现
 // ------------------------------------------------------------------------------------------------
 
 impl Display for ErrorKind {
@@ -111,9 +110,9 @@ impl std::error::Error for Error {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Private Functions
+// 私有函数
 // ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
-// Modules
+// 模块
 // ------------------------------------------------------------------------------------------------

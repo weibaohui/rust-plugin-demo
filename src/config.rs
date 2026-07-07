@@ -1,12 +1,11 @@
 /*!
-Provides a configuration type that can be used to map a plugin type identifier to a list of
-library paths. The result is the ability to create plugin manager instances from this configuration
-without having to load all the plugin provider paths programmatically.
+提供一个配置类型，用于将插件类型标识符映射到库路径列表。
+这样，无需在代码中手动加载所有插件提供者路径，即可从配置创建插件管理器实例。
 
-# Example
+# 示例
 
-The following uses the loaded configuration file to instantiate a plugin manager for the
-`SoundEffectPlugin` type, with any plugin libraries specified in the file.
+以下使用加载的配置文件为 `SoundEffectPlugin` 类型实例化一个插件管理器，
+其中包含文件中指定的所有插件库。
 
 ```rust
 use dygpi::config::PluginManagerConfiguration;
@@ -34,9 +33,9 @@ let plugin_manager: PluginManager<SoundEffectPlugin> =
     };
 ```
 
-# Example - Serde
+# 示例 - Serde
 
-Given the following simple configuration we can save it in any format supported by Serde.
+给定以下简单的配置，我们可以将其保存为 Serde 支持的任何格式。
 
 ```rust
 use dygpi::config::PluginManagerConfiguration;
@@ -46,7 +45,7 @@ let _ = config.insert("sound_effects", &["beep".as_ref(), "boop".as_ref()]);
 let _ = config.insert("light_effects", &["bright".as_ref(), "mood".as_ref()]);
 ```
 
-In **TOML**:
+**TOML 格式：**
 
 ```toml
 [plugins]
@@ -54,7 +53,7 @@ light_effects = ["bright", "mood"]
 sound_effects = ["boop", "beep"]
 ```
 
-In **JSON**:
+**JSON 格式：**
 
 ```json
 {
@@ -65,7 +64,7 @@ In **JSON**:
 }
 ```
 
-In **YAML**:
+**YAML 格式：**
 
 ```yaml
 ---
@@ -90,17 +89,16 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 // ------------------------------------------------------------------------------------------------
-// Public Types
+// 公开类型
 // ------------------------------------------------------------------------------------------------
 
 ///
-/// The plugin manager configuration itself. This is logically a map from a _plugin type identifier_
-/// and a list of library paths. The type identifier allows the configuration to partition the list
-/// of libraries so that multiple plugin managers may be created, for different plugin types, from
-/// the same configuration value or serialized file.
+/// 插件管理器配置本身。逻辑上是一个从 _插件类型标识符_ 到库路径列表的映射。
+/// 类型标识符允许配置对库列表进行分区，以便从同一个配置值或序列化文件中
+/// 为不同的插件类型创建多个插件管理器。
 ///
-/// Note, that if the feature "config_serde" is included this type implements the Serde
-/// `Deserialize` and `Serialize` traits and so may be included in configuration files.
+/// 注意，如果启用了 "config_serde" 特性，此类型将实现 Serde 的 `Deserialize` 和 `Serialize` trait，
+/// 因此可以包含在配置文件中。
 ///
 /// ```rust
 /// use dygpi::config::PluginManagerConfiguration;
@@ -121,7 +119,7 @@ pub struct PluginManagerConfiguration {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Implementations
+// 实现
 // ------------------------------------------------------------------------------------------------
 
 impl Default for PluginManagerConfiguration {
@@ -133,29 +131,28 @@ impl Default for PluginManagerConfiguration {
 }
 
 impl PluginManagerConfiguration {
-    /// Returns `true` if the configuration contains no plugin types, else `false`.
+    /// 如果配置中不包含任何插件类型，则返回 `true`，否则返回 `false`。
     pub fn is_empty(&self) -> bool {
         self.plugins.is_empty()
     }
 
-    /// Returns the number of plugin types in the configuration, also referred to as its ‘length’.
+    /// 返回配置中插件类型的数量，也称为其『长度』。
     pub fn len(&self) -> usize {
         self.plugins.len()
     }
 
-    /// Return an iterator over the plugin type identifiers in the configuration.
+    /// 返回配置中插件类型标识符的迭代器。
     pub fn plugin_types(&self) -> impl Iterator<Item = &String> {
         self.plugins.keys()
     }
 
-    /// Returns `true` if the configuration has values for the provided plugin type identifier,
-    /// else `false`.
+    /// 如果配置中有所提供的插件类型标识符的值，则返回 `true`，否则返回 `false`。
     pub fn contains_plugin_type(&self, plugin_type: &str) -> bool {
         self.plugins.contains_key(plugin_type)
     }
 
-    /// Returns an iterator over all the library paths specified for the provided plugin type
-    /// identifier. This method returns `None` if the configuration has no entry for the plugin type.
+    /// 返回所提供插件类型标识符的所有库路径的迭代器。
+    /// 如果配置中没有该插件类型的条目，此方法返回 `None`。
     pub fn plugin_libraries_for_type(
         &self,
         plugin_type: &str,
@@ -163,9 +160,8 @@ impl PluginManagerConfiguration {
         self.plugins.get(plugin_type).map(|vs| vs.iter())
     }
 
-    /// Insert a list of libraries for the named plugin type; if there exists an entry for this
-    /// type already it will be replaced. Note that this method will panic if the library list is
-    /// empty.
+    /// 为指定的插件类型插入一个库列表；如果该类型已有条目，则会被替换。
+    /// 注意，如果库列表为空，此方法会 panic。
     pub fn insert(
         &mut self,
         plugin_type: &str,
@@ -178,9 +174,8 @@ impl PluginManagerConfiguration {
         )
     }
 
-    /// Merge a list of libraries into the configuration for the plugin type. if there exists an
-    /// entry for this type already the values provided will be added to the list, if not then this
-    /// acts exactly as `insert`. Note that this method will panic if the library list is empty.
+    /// 将一批库合并到配置中指定的插件类型下。如果该类型已有条目，提供的值将添加到列表中；
+    /// 如果没有，则行为与 `insert` 完全相同。注意，如果库列表为空，此方法会 panic。
     pub fn merge(&mut self, plugin_type: &str, library_list: &[&Path]) {
         assert!(!library_list.is_empty());
         if let Some(libraries) = self.plugins.get_mut(plugin_type) {
@@ -190,17 +185,16 @@ impl PluginManagerConfiguration {
         }
     }
 
-    /// Removes and returns the plugin libraries for the plugin type.
+    /// 移除并返回指定插件类型的插件库。
     pub fn remove(&mut self, plugin_type: &str) -> Option<HashSet<PathBuf>> {
         self.plugins.remove(plugin_type)
     }
 
-    /// Construct and return a new [`PluginManager`](../manager/struct.PluginManager.html) for
-    /// plugins of type `T` using the list of libraries specified for the plugin type identifier
-    /// provided. Note that this method will return an error if there is no configured library
-    /// list for the provided plugin type.
+    /// 构造并返回一个新的 [`PluginManager`](../manager/struct.PluginManager.html)，
+    /// 用于插件类型 `T`，使用为指定插件类型标识符配置的库列表。
+    /// 注意，如果所提供插件类型没有配置的库列表，此方法将返回错误。
     ///
-    /// # Example
+    /// # 示例
     ///
     /// ```rust,no_run
     /// use dygpi::config::PluginManagerConfiguration;
@@ -253,7 +247,7 @@ impl PluginManagerConfiguration {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Unit Tests
+// 单元测试
 // ------------------------------------------------------------------------------------------------
 
 #[cfg(test)]

@@ -1,16 +1,14 @@
 /*!
-The components required by a plugin host to load/unload plugins.
+插件宿主加载/卸载插件所需的组件。
 
-The primary component of the plugin host's interaction is the [`PluginManager`](struct.PluginManager.html);
-this type manages the lifecycle of plugins, as well as opening and closing the necessary dynamic
-libraries.
+插件宿主交互的主要组件是 [`PluginManager`](struct.PluginManager.html)；
+该类型管理插件的生命周期，以及打开和关闭必要的动态库。
 
 # Example
 
-As the example below shows, the plugin manager is relatively simple in it's interface. However,
-as any more complex host may require loading multiple libraries, and different types of plugins,
-the [`PluginManagerConfiguration`](../config/struct.PluginManagerConfiguration.html) type is a
-higher-level abstraction.
+如下面的示例所示，插件管理器的接口相对简单。然而，对于更复杂的宿主，
+可能需要加载多个库和不同类型的插件，因此 [`PluginManagerConfiguration`](../config/struct.PluginManagerConfiguration.html)
+类型提供了更高级的抽象。
 
 ```rust,no_run
 use dygpi::manager::PluginManager;
@@ -61,12 +59,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 // ------------------------------------------------------------------------------------------------
-// Public Types
+// 公开类型
 // ------------------------------------------------------------------------------------------------
 
 ///
-/// The plugin manager loads and unloads plugins from a library which is dynamically opened and
-/// closed as necessary.
+/// 插件管理器负责从动态库加载和卸载插件，根据需要动态打开和关闭库。
 ///
 #[derive(Debug)]
 pub struct PluginManager<T>
@@ -79,27 +76,27 @@ where
 }
 
 #[cfg(target_os = "macos")]
-/// File name extension commonly used for a dynamic library.
+/// 动态库常用的文件扩展名。
 pub const PLATFORM_DYLIB_EXTENSION: &str = "dylib";
 
 #[cfg(target_os = "linux")]
-/// File name extension commonly used for a dynamic library.
+/// 动态库常用的文件扩展名。
 pub const PLATFORM_DYLIB_EXTENSION: &str = "so";
 
 #[cfg(target_os = "windows")]
-/// File name extension commonly used for a dynamic library.
+/// 动态库常用的文件扩展名。
 pub const PLATFORM_DYLIB_EXTENSION: &str = "dll";
 
 #[cfg(target_os = "windows")]
-/// Prefix for dynamic libraries, if any.
+/// 动态库的前缀（如果有）。
 pub const PLATFORM_DYLIB_PREFIX: &str = "";
 
 #[cfg(not(target_os = "windows"))]
-/// Prefix for dynamic libraries, if any.
+/// 动态库的前缀（如果有）。
 pub const PLATFORM_DYLIB_PREFIX: &str = "lib";
 
 // ------------------------------------------------------------------------------------------------
-// Private Types
+// 私有类型
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -118,19 +115,17 @@ struct LoadedLibrary {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Public Functions
+// 公开函数
 // ------------------------------------------------------------------------------------------------
 
 ///
-/// Given a file name, or path with a file name, return a new path that formats the file name
-/// according to common platform conventions. `PluginManager` does not use this function directly,
-/// it is up to the client to determine whether to use this before passing a file path to the
-/// manager.
+/// 给定一个文件名或包含文件名的路径，返回按照常见平台约定格式化后的新路径。
+/// `PluginManager` 不会直接使用此函数，由客户端决定是否在将文件路径传递给管理器之前使用它。
 ///
-/// # Example
+/// # 示例
 ///
-/// The following will return "`libplugins.dylib`" on macos, "`libplugins.so`" on linux, and
-/// "`plugins.dll`" on windows.
+/// 以下示例在 macOS 上返回 "`libplugins.dylib`"，在 Linux 上返回 "`libplugins.so`"，
+/// 在 Windows 上返回 "`plugins.dll`"。
 ///
 /// ```rust
 /// use dygpi::manager::make_platform_dylib_name;
@@ -138,8 +133,8 @@ struct LoadedLibrary {
 /// let dylib_name = make_platform_dylib_name("plugins".as_ref());
 /// ```
 ///
-/// If the file name appears to have an extension it will be overwritten by the platform extension.
-/// So, the following will replace "`foo`" with the platform extension.
+/// 如果文件名看起来有扩展名，它将被平台扩展名覆盖。
+/// 因此，以下示例会用平台扩展名替换 "`foo`"。
 ///
 /// ```rust
 /// use dygpi::manager::make_platform_dylib_name;
@@ -166,10 +161,10 @@ pub fn make_platform_dylib_name(file_path: &Path) -> PathBuf {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Implementations
+// 实现
 // ------------------------------------------------------------------------------------------------
 
-const UTF8_STRING_PANIC: &str = "Invalid UTF8 symbol name when converting to string";
+const UTF8_STRING_PANIC: &str = "将 UTF8 符号名转换为字符串时出错";
 
 // ------------------------------------------------------------------------------------------------
 
@@ -201,8 +196,7 @@ where
     T: Plugin,
 {
     ///
-    /// Construct a new plugin manager and have it use the values of the string slice
-    /// as a search path when loading libraries.
+    /// 构造一个新的插件管理器，并使用字符串切片的值作为加载库时的搜索路径。
     ///
     pub fn new_with_search_path(search_path: SearchPath) -> Self {
         Self {
@@ -213,10 +207,9 @@ where
     }
 
     ///
-    /// Load all plugins from the libraries that are specified in the named environment variable.
+    /// 从指定环境变量中列出的库加载所有插件。
     ///
-    /// The environment variable's value is assumed to be a list of paths separated by the colon,
-    /// `':'` character.
+    /// 环境变量的值被视为以冒号 `':'` 分隔的路径列表。
     ///
     pub fn load_all_plugins_from_env(&mut self, env_var: &str) -> Result<()> {
         info!("PluginManager::load_all_plugins_from_env({:?})", env_var);
@@ -231,7 +224,7 @@ where
     }
 
     ///
-    /// Load all plugins from the libraries specified in the string slice, each value is a file path.
+    /// 从字符串切片中指定的所有库加载插件，每个值都是一个文件路径。
     ///
     pub fn load_plugins_from_all(&mut self, file_names: &[&Path]) -> Result<()> {
         info!("PluginManager::load_all_plugins_from({:?})", file_names);
@@ -242,7 +235,7 @@ where
     }
 
     ///
-    /// Load all plugins from a single library with the provided file name/path.
+    /// 从具有给定文件名/路径的单个库中加载所有插件。
     ///
     #[allow(unsafe_code)]
     pub fn load_plugins_from(&mut self, file_name: &Path) -> Result<()> {
@@ -278,14 +271,12 @@ where
     }
 
     ///
-    /// Override the default registration function name
-    /// [`PLUGIN_REGISTRATION_FN_NAME`](../plugin/const.PLUGIN_REGISTRATION_FN_NAME.html).
+    /// 覆盖默认的注册函数名称 [`PLUGIN_REGISTRATION_FN_NAME`](../plugin/const.PLUGIN_REGISTRATION_FN_NAME.html)。
     ///
-    /// This function **must** conform to the type
-    /// [`PluginRegistrationFn`](../plugin/function.PluginRegistrationFn.html), and must be marked
-    /// as `#[no_mangle] pub extern "C"` in the same manner as the standard registration function.
+    /// 此函数**必须**符合 [`PluginRegistrationFn`](../plugin/function.PluginRegistrationFn.html) 类型，
+    /// 并且必须像标准注册函数一样标记为 `#[no_mangle] pub extern "C"`。
     ///
-    /// # Example
+    /// # 示例
     ///
     /// ```rust
     /// use dygpi::plugin::{Plugin, PluginRegistrar};
@@ -332,36 +323,35 @@ where
     }
 
     ///
-    /// Returns `true` if the plugin manager has no plugins registered, else `false`.
+    /// 如果插件管理器没有注册任何插件，则返回 `true`，否则返回 `false`。
     ///
     pub fn is_empty(&self) -> bool {
         self.plugins.read().unwrap().is_empty()
     }
 
     ///
-    /// Return the number of plugins registered in this plugin manager.
+    /// 返回此插件管理器中注册的插件数量。
     ///
     pub fn len(&self) -> usize {
         self.plugins.read().unwrap().len()
     }
 
     ///
-    /// Returns `true` if this plugin manager has a registered plugin with the provided plugin
-    /// identifier, else `false`.
+    /// 如果此插件管理器具有给定插件标识符的已注册插件，则返回 `true`，否则返回 `false`。
     pub fn contains(&self, plugin_id: &str) -> bool {
         let plugins = self.plugins.read().unwrap();
         plugins.contains_key(plugin_id)
     }
 
     ///
-    /// Returns the plugin with the provided plugin identifier, if one exists, else `None`.
+    /// 返回具有给定插件标识符的插件（如果存在），否则返回 `None`。
     pub fn get(&self, plugin_id: &str) -> Option<Arc<T>> {
         let plugins = self.plugins.read().unwrap();
         plugins.get(plugin_id).map(|p| p.plugin.clone())
     }
 
     ///
-    /// Return all the plugins registered in this plugin manager as a vector.
+    /// 返回此插件管理器中注册的所有插件，以向量形式返回。
     ///
     pub fn plugins(&self) -> Vec<Arc<T>> {
         let plugins = self.plugins.read().unwrap();
@@ -369,8 +359,7 @@ where
     }
 
     ///
-    /// Unload all plugins, and associated libraries, that are currently registered in this
-    /// plugin manager.
+    /// 卸载当前在此插件管理器中注册的所有插件及相关库。
     ///
     pub fn unload_all(&mut self) -> Result<()> {
         info!("PluginManager::unload_all()");
@@ -385,8 +374,8 @@ where
     }
 
     ///
-    /// Unload the plugin identified by the provided plugin identifier, if one exists. Note that
-    /// this method will also close the plugin library if no other plugins are using it.
+    /// 卸载由给定插件标识符标识的插件（如果存在）。注意，
+    /// 如果没有其他插件使用该插件库，此方法也会关闭该库。
     ///
     pub fn unload_plugin(&mut self, plugin_name: &str) -> Result<()> {
         info!("PluginManager::unload_plugin({:?})", plugin_name);
@@ -415,6 +404,7 @@ where
     }
 
     // --------------------------------------------------------------------------------------------
+    // 私有方法
 
     fn find_library(&self, file_name: &Path) -> PathBuf {
         trace!("PluginManager::find_library() > checking search path for library");
@@ -506,7 +496,7 @@ where
 }
 
 // ------------------------------------------------------------------------------------------------
-// Unit Tests
+// 单元测试
 // ------------------------------------------------------------------------------------------------
 
 #[cfg(test)]
