@@ -11,22 +11,40 @@ export default function PluginUi({ plugins }: PluginUiProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scriptRef = useRef<HTMLScriptElement | null>(null);
 
   // 筛选出有 UI 的插件
   const uiPlugins = plugins.filter(p => p.has_ui);
 
   // 当选中插件变化时加载对应的 Web Component
   useEffect(() => {
-    if (!selectedPlugin) return;
+    if (!selectedPlugin) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
+    let cancelled = false;
     setLoading(true);
     setError(null);
 
+    // 清理上一次的 script 标签
+    if (scriptRef.current && scriptRef.current.parentNode) {
+      scriptRef.current.parentNode.removeChild(scriptRef.current);
+      scriptRef.current = null;
+    }
+
+    // 清空渲染容器
+    if (containerRef.current) {
+      containerRef.current.innerHTML = '';
+    }
+
     getPluginUi(selectedPlugin.id)
       .then(uiInfo => {
+        if (cancelled) return;
+
         // 检查该 Web Component 是否已定义
         if (customElements.get(uiInfo.tag_name)) {
-          // 已定义，直接渲染
           renderComponent(uiInfo.tag_name, selectedPlugin.id);
           setLoading(false);
           return;
@@ -36,29 +54,38 @@ export default function PluginUi({ plugins }: PluginUiProps) {
         const script = document.createElement('script');
         script.src = uiInfo.js_url;
         script.onload = () => {
-          // 等待 Web Component 注册
+          if (cancelled) return;
           customElements.whenDefined(uiInfo.tag_name).then(() => {
-            renderComponent(uiInfo.tag_name, selectedPlugin.id);
-            setLoading(false);
+            if (!cancelled) {
+              renderComponent(uiInfo.tag_name, selectedPlugin.id);
+              setLoading(false);
+            }
           });
         };
         script.onerror = () => {
-          setError(`加载插件 UI 脚本失败: ${uiInfo.js_url}`);
-          setLoading(false);
-        };
-        document.head.appendChild(script);
-
-        return () => {
-          // 清理：移除 script 标签
-          if (script.parentNode) {
-            script.parentNode.removeChild(script);
+          if (!cancelled) {
+            setError(`加载插件 UI 脚本失败: ${uiInfo.js_url}`);
+            setLoading(false);
           }
         };
+        document.head.appendChild(script);
+        scriptRef.current = script;
       })
       .catch(err => {
-        setError(`获取 UI 元数据失败: ${err}`);
-        setLoading(false);
+        if (!cancelled) {
+          setError(`获取 UI 元数据失败: ${err}`);
+          setLoading(false);
+        }
       });
+
+    return () => {
+      cancelled = true;
+      // 移除 script 标签
+      if (scriptRef.current && scriptRef.current.parentNode) {
+        scriptRef.current.parentNode.removeChild(scriptRef.current);
+        scriptRef.current = null;
+      }
+    };
   }, [selectedPlugin]);
 
   function renderComponent(tagName: string, pluginId: string) {
