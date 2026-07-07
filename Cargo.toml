@@ -15,7 +15,6 @@ members = [
     "news_api",
     "reuters_plugin",
     "afp_plugin",
-    "news_host",
     "news_server",
 ]
 
