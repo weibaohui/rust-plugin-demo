@@ -1,77 +1,68 @@
-/**
- * 法新社插件 React 面板
- *
- * 宿主调用 mount(container, deps) 注入 React/ReactDOM/pluginId/api。
- * 使用 React.createElement（JSX 不可用——浏览器直接加载 ESM，无构建步骤）。
- */
-
-export function mount(container, { React, createRoot, pluginId, api }) {
+// ../afp_plugin/ui/panel.tsx
+function mount(container, deps) {
+  const { React, createRoot, pluginId, api } = deps;
   const { useState, useCallback, useEffect, createElement: h } = React;
-
-  /** 面板主组件 */
   function AfpPanel() {
-    const [language, setLanguage] = useState('fr');
+    const [language, setLanguage] = useState("fr");
     const [status, setStatus] = useState(null);
-    const [settings, setSettings] = useState(null);
-
-    // 加载已保存的设置
     useEffect(() => {
-      api
-        .getSettings(pluginId)
-        .then((s) => {
-          if (s && s.language) setLanguage(s.language);
-          setSettings(s);
-        })
-        .catch(() => {});
+      api.getSettings(pluginId).then((s) => {
+        if (s?.language) setLanguage(s.language);
+      }).catch(() => {
+      });
     }, []);
-
     const handleSave = useCallback(async () => {
-      setStatus('saving');
+      setStatus("saving");
       try {
         await api.saveSettings(pluginId, { language });
-        setStatus('success');
-        setTimeout(() => setStatus(null), 2000);
-      } catch (_) {
-        setStatus('error');
-        setTimeout(() => setStatus(null), 2000);
+        setStatus("success");
+        setTimeout(() => setStatus(null), 2e3);
+      } catch {
+        setStatus("error");
+        setTimeout(() => setStatus(null), 2e3);
       }
     }, [language]);
-
-    return h('div', { className: 'plugin-panel' },
-      h('h3', { className: 'panel-title' }, '📡 法新社控制面板'),
-      h('p', { className: 'panel-desc' }, '配置 AFP 的默认语言偏好'),
-
-      h('div', { className: 'field' },
-        h('label', { className: 'field-label' }, '语言 (Language)'),
-        h('select', {
-          className: 'field-input',
-          value: language,
-          onChange: (e) => setLanguage(e.target.value),
-        },
-          h('option', { value: 'fr' }, '🇫🇷 Français'),
-          h('option', { value: 'en' }, '🇬🇧 English'),
-          h('option', { value: 'ar' }, '🇸🇦 العربية'),
-          h('option', { value: 'es' }, '🇪🇸 Español'),
-        ),
+    return h(
+      "div",
+      { className: "plugin-panel" },
+      h("h3", { className: "panel-title" }, "\u{1F4E1} \u6CD5\u65B0\u793E\u63A7\u5236\u9762\u677F"),
+      h("p", { className: "panel-desc" }, "\u914D\u7F6E AFP \u7684\u9ED8\u8BA4\u8BED\u8A00\u504F\u597D"),
+      h(
+        "div",
+        { className: "field" },
+        h("label", { className: "field-label" }, "\u8BED\u8A00 (Language)"),
+        h(
+          "select",
+          {
+            className: "field-input",
+            value: language,
+            onChange: (e) => setLanguage(e.target.value)
+          },
+          h("option", { value: "fr" }, "\u{1F1EB}\u{1F1F7} Fran\xE7ais"),
+          h("option", { value: "en" }, "\u{1F1EC}\u{1F1E7} English"),
+          h("option", { value: "ar" }, "\u{1F1F8}\u{1F1E6} \u0627\u0644\u0639\u0631\u0628\u064A\u0629"),
+          h("option", { value: "es" }, "\u{1F1EA}\u{1F1F8} Espa\xF1ol")
+        )
       ),
-
-      h('div', { className: 'field' },
-        h('label', { className: 'field-label' }, '当前插件 ID'),
-        h('code', { className: 'field-code' }, pluginId),
+      h(
+        "div",
+        { className: "field" },
+        h("label", { className: "field-label" }, "\u5F53\u524D\u63D2\u4EF6 ID"),
+        h("code", { className: "field-code" }, pluginId)
       ),
-
-      h('button', {
-        className: 'btn btn-primary',
+      h("button", {
+        className: "btn btn-primary",
         onClick: handleSave,
-        disabled: status === 'saving',
-      }, status === 'saving' ? '⏳ 保存中...' : '💾 保存设置'),
-
-      status === 'success' && h('p', { className: 'msg success' }, '✅ 语言偏好已保存'),
-      status === 'error' && h('p', { className: 'msg error' }, '❌ 保存失败，请重试'),
+        disabled: status === "saving"
+      }, status === "saving" ? "\u23F3 \u4FDD\u5B58\u4E2D\u2026" : "\u{1F4BE} \u4FDD\u5B58\u8BBE\u7F6E"),
+      status === "success" && h("p", { className: "msg success" }, "\u2705 \u8BED\u8A00\u504F\u597D\u5DF2\u4FDD\u5B58"),
+      status === "error" && h("p", { className: "msg error" }, "\u274C \u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5")
     );
   }
-
   const root = createRoot(container);
   root.render(h(AfpPanel));
   return () => root.unmount();
 }
+export {
+  mount
+};

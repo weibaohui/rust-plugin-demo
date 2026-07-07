@@ -19,3 +19,8 @@ Cargo.lock
 frontend/node_modules/
 frontend/dist/
 frontend/package-lock.json
+
+## ------------------------------------------------------------------------------------------------
+# Plugin UI compiled output (generated from .tsx by esbuild)
+reuters_plugin/ui/panel.js
+afp_plugin/ui/panel.js

@@ -1,76 +1,62 @@
-/**
- * 路透社插件 React 面板
- *
- * 宿主调用 mount(container, deps) 注入 React/ReactDOM/pluginId/api。
- * 使用 React.createElement（JSX 不可用——浏览器直接加载 ESM，无构建步骤）。
- */
-
-export function mount(container, { React, createRoot, pluginId, api }) {
+// ../reuters_plugin/ui/panel.tsx
+function mount(container, deps) {
+  const { React, createRoot, pluginId, api } = deps;
   const { useState, useCallback, useEffect, createElement: h } = React;
-
-  /** 面板主组件 */
   function ReutersPanel() {
-    const [dateline, setDateline] = useState('LONDON');
-    const [status, setStatus] = useState(null); // 'saving' | 'success' | 'error'
-    const [settings, setSettings] = useState(null);
-
-    // 加载已保存的设置
+    const [dateline, setDateline] = useState("LONDON");
+    const [status, setStatus] = useState(null);
     useEffect(() => {
-      api
-        .getSettings(pluginId)
-        .then((s) => {
-          if (s && s.dateline) setDateline(s.dateline);
-          setSettings(s);
-        })
-        .catch(() => {});
+      api.getSettings(pluginId).then((s) => {
+        if (s?.dateline) setDateline(s.dateline);
+      }).catch(() => {
+      });
     }, []);
-
     const handleSave = useCallback(async () => {
-      setStatus('saving');
+      setStatus("saving");
       try {
         await api.saveSettings(pluginId, { dateline });
-        setStatus('success');
-        setTimeout(() => setStatus(null), 2000);
-      } catch (_) {
-        setStatus('error');
-        setTimeout(() => setStatus(null), 2000);
+        setStatus("success");
+        setTimeout(() => setStatus(null), 2e3);
+      } catch {
+        setStatus("error");
+        setTimeout(() => setStatus(null), 2e3);
       }
     }, [dateline]);
-
-    return h('div', { className: 'plugin-panel' },
-      h('h3', { className: 'panel-title' }, '📰 路透社控制面板'),
-      h('p', { className: 'panel-desc' }, '配置路透社的电头（dateline）偏好设置'),
-
-      h('div', { className: 'field' },
-        h('label', { className: 'field-label' }, '电头 (Dateline)'),
-        h('input', {
-          className: 'field-input',
+    return h(
+      "div",
+      { className: "plugin-panel" },
+      h("h3", { className: "panel-title" }, "\u{1F4F0} \u8DEF\u900F\u793E\u63A7\u5236\u9762\u677F"),
+      h("p", { className: "panel-desc" }, "\u914D\u7F6E\u8DEF\u900F\u793E\u7684\u7535\u5934\uFF08dateline\uFF09\u504F\u597D\u8BBE\u7F6E"),
+      h(
+        "div",
+        { className: "field" },
+        h("label", { className: "field-label" }, "\u7535\u5934 (Dateline)"),
+        h("input", {
+          className: "field-input",
           value: dateline,
           onChange: (e) => setDateline(e.target.value),
-          placeholder: '如 LONDON, NEW YORK...',
-        }),
+          placeholder: "\u5982 LONDON, NEW YORK\u2026"
+        })
       ),
-
-      h('div', { className: 'field' },
-        h('label', { className: 'field-label' }, '当前插件 ID'),
-        h('code', { className: 'field-code' }, pluginId),
+      h(
+        "div",
+        { className: "field" },
+        h("label", { className: "field-label" }, "\u5F53\u524D\u63D2\u4EF6 ID"),
+        h("code", { className: "field-code" }, pluginId)
       ),
-
-      h('button', {
-        className: 'btn btn-primary',
+      h("button", {
+        className: "btn btn-primary",
         onClick: handleSave,
-        disabled: status === 'saving',
-      }, status === 'saving' ? '⏳ 保存中...' : '💾 保存设置'),
-
-      status === 'success' && h('p', { className: 'msg success' }, '✅ 设置已保存'),
-      status === 'error' && h('p', { className: 'msg error' }, '❌ 保存失败，请重试'),
+        disabled: status === "saving"
+      }, status === "saving" ? "\u23F3 \u4FDD\u5B58\u4E2D\u2026" : "\u{1F4BE} \u4FDD\u5B58\u8BBE\u7F6E"),
+      status === "success" && h("p", { className: "msg success" }, "\u2705 \u8BBE\u7F6E\u5DF2\u4FDD\u5B58"),
+      status === "error" && h("p", { className: "msg error" }, "\u274C \u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5")
     );
   }
-
-  // 渲染
   const root = createRoot(container);
   root.render(h(ReutersPanel));
-
-  // 返回清理函数
   return () => root.unmount();
 }
+export {
+  mount
+};
