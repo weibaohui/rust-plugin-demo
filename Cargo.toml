@@ -12,9 +12,6 @@ publish = true
 
 [workspace]
 members = [
-    "test_api",
-    "test_plugin",
-    "test_main",
     "news_api",
     "reuters_plugin",
     "afp_plugin",

@@ -131,7 +131,10 @@ async fn main() {
         .route("/api/libraries/:name/load", post(load_library_handler))
         // 插件管理
         .route("/api/plugins", get(list_plugins_handler))
-        .route("/api/plugins/:id", get(get_plugin_handler).delete(unload_plugin_handler))
+        .route(
+            "/api/plugins/:id",
+            get(get_plugin_handler).delete(unload_plugin_handler),
+        )
         .route("/api/plugins/:id/publish", post(publish_handler))
         // 批量操作
         .route("/api/plugins", delete(unload_all_handler))
@@ -219,9 +222,7 @@ fn clean_lib_name(file_stem: &str) -> String {
         .to_string()
 }
 
-async fn scan_libraries_handler(
-    State(state): State<SharedState>,
-) -> Json<LibraryScanResult> {
+async fn scan_libraries_handler(State(state): State<SharedState>) -> Json<LibraryScanResult> {
     let ctx = state.read().unwrap();
     let mut libs: Vec<LibraryInfo> = Vec::new();
 
@@ -230,11 +231,7 @@ async fn scan_libraries_handler(
         let stem = path.file_stem().unwrap().to_string_lossy().to_string();
         let name = clean_lib_name(&stem);
         let loaded = ctx.library_plugins.contains_key(&path);
-        let plugin_count = ctx
-            .library_plugins
-            .get(&path)
-            .map(|v| v.len())
-            .unwrap_or(0);
+        let plugin_count = ctx.library_plugins.get(&path).map(|v| v.len()).unwrap_or(0);
 
         libs.push(LibraryInfo {
             name,
@@ -277,16 +274,14 @@ async fn load_library_handler(
         })?;
 
     let mut ctx = state.write().unwrap();
-    ctx.manager
-        .load_plugins_from(&path)
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: format!("加载失败: {:?}", e),
-                }),
-            )
-        })?;
+    ctx.manager.load_plugins_from(&path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("加载失败: {:?}", e),
+            }),
+        )
+    })?;
 
     // 记录此库贡献的插件 ID
     let plugins = ctx.manager.plugins();
@@ -305,12 +300,10 @@ async fn load_library_handler(
     let new_plugins: Vec<PluginInfo> = new_ids
         .iter()
         .filter_map(|id| {
-            ctx.manager
-                .get(id)
-                .map(|p| PluginInfo {
-                    id: p.plugin_id().clone(),
-                    agency: p.agency_name().to_string(),
-                })
+            ctx.manager.get(id).map(|p| PluginInfo {
+                id: p.plugin_id().clone(),
+                agency: p.agency_name().to_string(),
+            })
         })
         .collect();
 
@@ -324,9 +317,7 @@ async fn load_library_handler(
 // 列出已加载的插件
 // ------------------------------------------------------------------------------------------------
 
-async fn list_plugins_handler(
-    State(state): State<SharedState>,
-) -> Json<Vec<PluginInfo>> {
+async fn list_plugins_handler(State(state): State<SharedState>) -> Json<Vec<PluginInfo>> {
     let ctx = state.read().unwrap();
     let plugins = ctx.manager.plugins();
     Json(
@@ -450,9 +441,7 @@ async fn unload_plugin_handler(
 // 卸载所有插件
 // ------------------------------------------------------------------------------------------------
 
-async fn unload_all_handler(
-    State(state): State<SharedState>,
-) -> Json<ApiMessage> {
+async fn unload_all_handler(State(state): State<SharedState>) -> Json<ApiMessage> {
     let mut ctx = state.write().unwrap();
     ctx.library_plugins.clear();
     ctx.manager.unload_all().unwrap_or_default();
