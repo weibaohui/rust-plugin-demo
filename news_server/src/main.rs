@@ -6,13 +6,14 @@ use axum::{
     Json, Router,
 };
 use dygpi::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
-use dygpi::plugin::Plugin;
+use dygpi::plugin::{Plugin, PluginStatus};
 use news_api::{HostContext, NewsAgencyPlugin, PluginMenu};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
@@ -26,6 +27,8 @@ struct AppContext {
     library_plugins: HashMap<PathBuf, Vec<String>>,
     /// 已发布的文章计数（供 HostContext 使用）
     article_count: AtomicUsize,
+    /// 每个插件的 cron 取消标志(start 时注册,stop 时置 true)
+    cron_flags: HashMap<String, Vec<Arc<AtomicBool>>>,
 }
 
 type SharedState = Arc<RwLock<AppContext>>;
@@ -53,10 +56,17 @@ struct PluginInfo {
     ui_entry: Option<String>,
     /// 插件声明的菜单树（供前端 Sidebar 渲染）。
     menu: Vec<PluginMenu>,
+    /// 插件当前生命周期状态。
+    status: PluginStatus,
 }
 
-/// 把插件转为前端可消费的 PluginInfo：has_ui 与 qiankun 入口均由 ui_base_dir/ui_dist 推导。
-fn plugin_to_info(p: &NewsAgencyPlugin) -> PluginInfo {
+/// 把插件转为前端可消费的 PluginInfo。菜单仅在 Enabled/Running 状态下对外暴露。
+fn plugin_to_info(p: &NewsAgencyPlugin, status: PluginStatus) -> PluginInfo {
+    let menu = if matches!(status, PluginStatus::Enabled | PluginStatus::Running) {
+        p.menus().to_vec()
+    } else {
+        Vec::new()
+    };
     PluginInfo {
         id: p.plugin_id().clone(),
         agency: p.agency_name().to_string(),
@@ -64,7 +74,8 @@ fn plugin_to_info(p: &NewsAgencyPlugin) -> PluginInfo {
         ui_entry: p
             .ui_base_dir()
             .map(|d| format!("/plugin-files/{}/dist/index.html", d)),
-        menu: p.menus().to_vec(),
+        menu,
+        status,
     }
 }
 
@@ -143,6 +154,7 @@ async fn main() {
         manager: PluginManager::default(),
         library_plugins: HashMap::new(),
         article_count: AtomicUsize::new(0),
+        cron_flags: HashMap::new(),
     }));
 
     let app = Router::new()
@@ -156,6 +168,11 @@ async fn main() {
             get(get_plugin_handler).delete(unload_plugin_handler),
         )
         .route("/api/plugins/:id/publish", post(publish_handler))
+        // 插件生命周期状态机
+        .route("/api/plugins/:id/enable", post(enable_plugin_handler))
+        .route("/api/plugins/:id/disable", post(disable_plugin_handler))
+        .route("/api/plugins/:id/start", post(start_plugin_handler))
+        .route("/api/plugins/:id/stop", post(stop_plugin_handler))
         // 批量操作
         .route("/api/plugins", delete(unload_all_handler))
         // 插件前端 UI 静态文件
@@ -321,7 +338,16 @@ async fn load_library_handler(
 
     let new_plugins: Vec<PluginInfo> = new_ids
         .iter()
-        .filter_map(|id| ctx.manager.get(id).map(|p| plugin_to_info(&*p)))
+        .filter_map(|id| {
+            ctx.manager.get(id).map(|p| {
+                plugin_to_info(
+                    &*p,
+                    ctx.manager
+                        .plugin_status(id)
+                        .unwrap_or(PluginStatus::Loaded),
+                )
+            })
+        })
         .collect();
 
     info!("已加载插件库，新增 {} 个插件", new_plugins.len());
@@ -337,7 +363,19 @@ async fn load_library_handler(
 async fn list_plugins_handler(State(state): State<SharedState>) -> Json<Vec<PluginInfo>> {
     let ctx = state.read().unwrap();
     let plugins = ctx.manager.plugins();
-    Json(plugins.iter().map(|p| plugin_to_info(&**p)).collect())
+    Json(
+        plugins
+            .iter()
+            .map(|p| {
+                plugin_to_info(
+                    &**p,
+                    ctx.manager
+                        .plugin_status(&p.plugin_id())
+                        .unwrap_or(PluginStatus::Loaded),
+                )
+            })
+            .collect(),
+    )
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -358,7 +396,11 @@ async fn get_plugin_handler(
         )
     })?;
 
-    Ok(Json(plugin_to_info(&*plugin)))
+    let status = ctx
+        .manager
+        .plugin_status(&id)
+        .unwrap_or(PluginStatus::Loaded);
+    Ok(Json(plugin_to_info(&*plugin, status)))
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -428,6 +470,13 @@ async fn unload_plugin_handler(
     }
     ctx.library_plugins.retain(|_k, v| !v.is_empty());
 
+    // 停止该插件的 cron 任务
+    if let Some(flags) = ctx.cron_flags.remove(&id) {
+        for f in flags {
+            f.store(true, Ordering::Relaxed);
+        }
+    }
+
     ctx.manager.unload_plugin(&id).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -449,12 +498,140 @@ async fn unload_plugin_handler(
 
 async fn unload_all_handler(State(state): State<SharedState>) -> Json<ApiMessage> {
     let mut ctx = state.write().unwrap();
+    // 停止所有 cron 任务
+    for (_, flags) in ctx.cron_flags.drain() {
+        for f in flags {
+            f.store(true, Ordering::Relaxed);
+        }
+    }
     ctx.library_plugins.clear();
     ctx.manager.unload_all().unwrap_or_default();
     info!("已卸载所有插件");
     Json(ApiMessage {
         message: "所有插件已卸载".to_string(),
     })
+}
+
+// ------------------------------------------------------------------------------------------------
+// 插件生命周期状态机:enable / disable / start / stop
+// ------------------------------------------------------------------------------------------------
+
+async fn enable_plugin_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let mut ctx = state.write().unwrap();
+    ctx.manager.enable_plugin(&id).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("启用失败: {:?}", e),
+            }),
+        )
+    })?;
+    info!("已启用插件 '{}'", id);
+    Ok(Json(ApiMessage {
+        message: format!("插件 '{}' 已启用", id),
+    }))
+}
+
+async fn disable_plugin_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let mut ctx = state.write().unwrap();
+    ctx.manager.disable_plugin(&id).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("禁用失败: {:?}", e),
+            }),
+        )
+    })?;
+    if let Some(flags) = ctx.cron_flags.remove(&id) {
+        for f in flags {
+            f.store(true, Ordering::Relaxed);
+        }
+    }
+    info!("已禁用插件 '{}'", id);
+    Ok(Json(ApiMessage {
+        message: format!("插件 '{}' 已禁用", id),
+    }))
+}
+
+async fn start_plugin_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let cron_specs = {
+        let mut ctx = state.write().unwrap();
+        ctx.manager.start_plugin(&id).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: format!("启动失败: {:?}", e),
+                }),
+            )
+        })?
+    };
+    if !cron_specs.is_empty() {
+        let plugin = {
+            let ctx = state.read().unwrap();
+            ctx.manager.get(&id)
+        };
+        if let Some(plugin) = plugin {
+            let mut flags = Vec::new();
+            for spec in cron_specs {
+                let flag = Arc::new(AtomicBool::new(false));
+                let p = plugin.clone();
+                let name = spec.name.clone();
+                let secs = spec.interval_secs;
+                let stop_flag = flag.clone();
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(Duration::from_secs(secs)).await;
+                        if stop_flag.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        let _ = p.on_cron(&name);
+                    }
+                });
+                flags.push(flag);
+            }
+            let mut ctx = state.write().unwrap();
+            ctx.cron_flags.insert(id.clone(), flags);
+        }
+    }
+    info!("已启动插件 '{}'", id);
+    Ok(Json(ApiMessage {
+        message: format!("插件 '{}' 已启动", id),
+    }))
+}
+
+async fn stop_plugin_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    {
+        let mut ctx = state.write().unwrap();
+        ctx.manager.stop_plugin(&id).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: format!("停止失败: {:?}", e),
+                }),
+            )
+        })?;
+        if let Some(flags) = ctx.cron_flags.remove(&id) {
+            for f in flags {
+                f.store(true, Ordering::Relaxed);
+            }
+        }
+    }
+    info!("已停止插件 '{}'", id);
+    Ok(Json(ApiMessage {
+        message: format!("插件 '{}' 已停止", id),
+    }))
 }
 
 // ------------------------------------------------------------------------------------------------

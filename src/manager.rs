@@ -47,8 +47,8 @@ plugin.play();
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::plugin::{
-    compatibility_hash, CompatibilityFn, Plugin, PluginRegistrar, PluginRegistrationFn,
-    COMPATIBILITY_FN_NAME, PLUGIN_REGISTRATION_FN_NAME,
+    compatibility_hash, CompatibilityFn, CronSpec, Plugin, PluginRegistrar, PluginRegistrationFn,
+    PluginStatus, COMPATIBILITY_FN_NAME, PLUGIN_REGISTRATION_FN_NAME,
 };
 use libloading::{Library, Symbol};
 use search_path::SearchPath;
@@ -106,6 +106,7 @@ where
 {
     plugin: Arc<T>,
     in_library: Arc<LoadedLibrary>,
+    status: PluginStatus,
 }
 
 #[derive(Debug)]
@@ -381,6 +382,18 @@ where
         info!("PluginManager::unload_plugin({:?})", plugin_name);
         let mut plugins = self.plugins.write().unwrap();
         if let Some(plugin) = plugins.remove(plugin_name) {
+            // 收敛:Running 先 stop,Enabled 先 disable
+            match plugin.status {
+                PluginStatus::Running => {
+                    plugin.plugin.on_stop()?;
+                }
+                PluginStatus::Enabled => {
+                    plugin.plugin.on_disable()?;
+                }
+                PluginStatus::Loaded => {}
+            }
+            trace!("PluginManager::unload_plugin() > calling plugin `on_uninstall`");
+            plugin.plugin.on_uninstall()?;
             trace!("PluginManager::unload_plugin() > calling plugin `on_unload`");
             plugin.plugin.on_unload()?;
             if Arc::strong_count(&plugin.in_library) == 1 {
@@ -401,6 +414,61 @@ where
             }
         }
         Ok(())
+    }
+
+    /// 启用插件:`Loaded → Enabled`,调用 `on_enable`。
+    pub fn enable_plugin(&mut self, plugin_id: &str) -> Result<()> {
+        let mut plugins = self.plugins.write().unwrap();
+        if let Some(plugin) = plugins.get_mut(plugin_id) {
+            if plugin.status == PluginStatus::Loaded {
+                plugin.plugin.on_enable()?;
+                plugin.status = PluginStatus::Enabled;
+            }
+        }
+        Ok(())
+    }
+
+    /// 禁用插件:`Enabled → Loaded`,调用 `on_disable`。
+    pub fn disable_plugin(&mut self, plugin_id: &str) -> Result<()> {
+        let mut plugins = self.plugins.write().unwrap();
+        if let Some(plugin) = plugins.get_mut(plugin_id) {
+            if plugin.status == PluginStatus::Enabled {
+                plugin.plugin.on_disable()?;
+                plugin.status = PluginStatus::Loaded;
+            }
+        }
+        Ok(())
+    }
+
+    /// 启动插件:`Enabled → Running`,调用 `on_start`,返回 `cron_specs` 供宿主调度。
+    pub fn start_plugin(&mut self, plugin_id: &str) -> Result<Vec<CronSpec>> {
+        let mut plugins = self.plugins.write().unwrap();
+        if let Some(plugin) = plugins.get_mut(plugin_id) {
+            if plugin.status == PluginStatus::Enabled {
+                plugin.plugin.on_start()?;
+                plugin.status = PluginStatus::Running;
+                return Ok(plugin.plugin.cron_specs());
+            }
+        }
+        Ok(Vec::new())
+    }
+
+    /// 停止插件:`Running → Enabled`,调用 `on_stop`。
+    pub fn stop_plugin(&mut self, plugin_id: &str) -> Result<()> {
+        let mut plugins = self.plugins.write().unwrap();
+        if let Some(plugin) = plugins.get_mut(plugin_id) {
+            if plugin.status == PluginStatus::Running {
+                plugin.plugin.on_stop()?;
+                plugin.status = PluginStatus::Enabled;
+            }
+        }
+        Ok(())
+    }
+
+    /// 返回插件当前状态(若存在)。
+    pub fn plugin_status(&self, plugin_id: &str) -> Option<PluginStatus> {
+        let plugins = self.plugins.read().unwrap();
+        plugins.get(plugin_id).map(|p| p.status)
     }
 
     // --------------------------------------------------------------------------------------------
@@ -480,11 +548,14 @@ where
         {
             info!("PluginManager::register_plugins() > calling plugin `on_load`");
             plugin.on_load()?;
+            info!("PluginManager::register_plugins() > calling plugin `on_install`");
+            plugin.on_install()?;
             if let Some(_) = registry.insert(
                 plugin.plugin_id().to_string(),
                 LoadedPlugin {
                     plugin,
                     in_library: from_library.clone(),
+                    status: PluginStatus::Loaded,
                 },
             ) {
                 warn!("New plugin replaced a plugin with the same ID");

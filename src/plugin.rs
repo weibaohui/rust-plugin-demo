@@ -90,6 +90,36 @@ use std::sync::Arc;
 // ------------------------------------------------------------------------------------------------
 
 ///
+/// 插件当前的生命周期状态。
+///
+/// 状态流转:`load → Loaded → enable → Enabled → start → Running`;
+/// `stop → Enabled`;`disable → Loaded`;`unload → 移除`。
+/// 菜单可见性:仅 `Enabled` / `Running` 时插件菜单对外暴露。
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "config_serde", derive(serde::Serialize))]
+pub enum PluginStatus {
+    /// 已加载(`on_load` + `on_install`),菜单不可见。
+    Loaded,
+    /// 已启用(`on_enable`),菜单可见、API 可访问。
+    Enabled,
+    /// 已启动(`on_start` + cron 注册),后台任务运行。
+    Running,
+}
+
+///
+/// 插件声明的定时任务规格。宿主在 `on_start` 后据此调度,`on_stop` 时注销。
+///
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "config_serde", derive(serde::Serialize))]
+pub struct CronSpec {
+    /// 任务名(插件内唯一)。
+    pub name: String,
+    /// 执行间隔(秒)。
+    pub interval_secs: u64,
+}
+
+///
 /// 任何插件类型都必须实现此 trait。它不仅提供插件 ID，还提供了实现者可用来管理
 /// 插件所拥有资源的生命周期方法。
 pub trait Plugin: Any + Debug + Sync + Send {
@@ -102,15 +132,60 @@ pub trait Plugin: Any + Debug + Sync + Send {
     /// ```
     fn plugin_id(&self) -> &String;
 
-    ///
-    /// 由插件管理器在注册过程完成后调用。
-    ///
-    fn on_load(&self) -> Result<()>;
+    /// 由插件管理器在注册过程完成后调用。默认 no-op。
+    fn on_load(&self) -> Result<()> {
+        Ok(())
+    }
 
-    ///
-    /// 由插件管理器在插件被注销后、库关闭前调用。
-    ///
-    fn on_unload(&self) -> Result<()>;
+    /// 由插件管理器在插件被注销后、库关闭前调用。默认 no-op。
+    fn on_unload(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 首次安装:数据初始化(幂等)。`load` 时调用。默认 no-op。
+    fn on_install(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 卸载清理。`unload` 时调用。默认 no-op。
+    fn on_uninstall(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 版本迁移:`load` 时若已安装版本与当前不同则调用。默认 no-op(留作扩展)。
+    fn on_upgrade(&self, _from_version: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// 启用:暴露能力(菜单可见、API 可访问)。`Loaded → Enabled`。默认 no-op。
+    fn on_enable(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 禁用:收敛能力。`Enabled → Loaded`。默认 no-op。
+    fn on_disable(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 启动后台任务。`Enabled → Running`。默认 no-op。
+    fn on_start(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 停止后台任务。`Running → Enabled`。默认 no-op。
+    fn on_stop(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// 定时任务执行(由宿主按 `cron_specs` 调度)。默认 no-op。
+    fn on_cron(&self, _name: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// 声明的定时任务规格;宿主在 `on_start` 后据此调度,`on_stop` 时注销。默认空。
+    fn cron_specs(&self) -> Vec<CronSpec> {
+        Vec::new()
+    }
 }
 
 ///

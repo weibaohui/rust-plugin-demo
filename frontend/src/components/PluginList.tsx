@@ -1,13 +1,32 @@
-import type { PluginInfo } from '../api';
+import type { PluginInfo, PluginStatus } from '../api';
 
 interface PluginListProps {
   plugins: PluginInfo[];
   onUnload: (id: string) => void;
   onUnloadAll: () => void;
   onRefresh: () => Promise<PluginInfo[]>;
+  onEnable: (id: string) => Promise<void>;
+  onDisable: (id: string) => Promise<void>;
+  onStart: (id: string) => Promise<void>;
+  onStop: (id: string) => Promise<void>;
 }
 
-export default function PluginList({ plugins, onUnload, onUnloadAll, onRefresh }: PluginListProps) {
+const STATUS_META: Record<PluginStatus, { label: string; color: string }> = {
+  Loaded: { label: '已加载', color: 'var(--bg-hover)' },
+  Enabled: { label: '已启用', color: 'var(--accent)' },
+  Running: { label: '运行中', color: 'var(--green)' },
+};
+
+export default function PluginList({
+  plugins,
+  onUnload,
+  onUnloadAll,
+  onRefresh,
+  onEnable,
+  onDisable,
+  onStart,
+  onStop,
+}: PluginListProps) {
   return (
     <div className="section-card">
       <div className="section-header">
@@ -25,13 +44,13 @@ export default function PluginList({ plugins, onUnload, onUnloadAll, onRefresh }
       </div>
 
       <div className="info-box">
-        <strong>💡 插件全生命周期管理</strong>
+        <strong>💡 插件全生命周期状态机</strong>
         <ol>
           <li><strong>发现</strong> — 在「插件库管理」中扫描可用的 .dylib 文件</li>
-          <li><strong>加载</strong> — 点击加载按钮，框架自动打开动态库、检查版本兼容性、调用注册函数</li>
-          <li><strong>查看</strong> — 在此页面查看已加载的插件列表，每个插件有唯一 ID 和机构名称</li>
-          <li><strong>调用</strong> — 在「发布新闻」页面选择插件，输入新闻内容，调用 publish() 方法</li>
-          <li><strong>卸载</strong> — 卸载单个插件或全部卸载，框架关闭动态库释放资源</li>
+          <li><strong>加载</strong> — on_load + on_install,状态 = Loaded</li>
+          <li><strong>启用</strong> — on_enable,状态 = Enabled,菜单对前端可见</li>
+          <li><strong>启动</strong> — on_start + cron 注册,状态 = Running,后台任务运行</li>
+          <li><strong>停止/禁用/卸载</strong> — on_stop / on_disable / on_unload,资源收敛</li>
         </ol>
       </div>
 
@@ -43,34 +62,60 @@ export default function PluginList({ plugins, onUnload, onUnloadAll, onRefresh }
         </div>
       ) : (
         <div className="plugin-grid">
-          {plugins.map(plugin => (
-            <div key={plugin.id} className="plugin-card">
-              <div className="plugin-card-header">
-                <span className="plugin-agency-icon">
-                  {plugin.agency === 'Reuters' ? '📰' : plugin.agency === 'Agence France-Presse' ? '🇫🇷' : '📡'}
-                </span>
-                <span className="plugin-agency-name">{plugin.agency}</span>
-              </div>
-              <div className="plugin-card-body">
-                <div className="field">
-                  <span className="field-label">插件 ID</span>
-                  <code className="field-value plugin-id">{plugin.id}</code>
+          {plugins.map(plugin => {
+            const meta = STATUS_META[plugin.status];
+            return (
+              <div key={plugin.id} className="plugin-card">
+                <div className="plugin-card-header">
+                  <span className="plugin-agency-icon">
+                    {plugin.agency === 'Reuters'
+                      ? '📰'
+                      : plugin.agency === 'Agence France-Presse'
+                        ? '🇫🇷'
+                        : '📡'}
+                  </span>
+                  <span className="plugin-agency-name">{plugin.agency}</span>
+                  <span
+                    className="status-badge"
+                    style={{ background: meta.color, color: 'white' }}
+                  >
+                    {meta.label}
+                  </span>
                 </div>
-                <div className="field">
-                  <span className="field-label">状态</span>
-                  <span className="status-badge status-loaded">已加载 ✅</span>
+                <div className="plugin-card-body">
+                  <div className="field">
+                    <span className="field-label">插件 ID</span>
+                    <code className="field-value plugin-id">{plugin.id}</code>
+                  </div>
+                </div>
+                <div className="plugin-card-footer">
+                  {plugin.status === 'Loaded' && (
+                    <button className="btn btn-primary btn-sm" onClick={() => onEnable(plugin.id)}>
+                      启用
+                    </button>
+                  )}
+                  {plugin.status === 'Enabled' && (
+                    <>
+                      <button className="btn btn-primary btn-sm" onClick={() => onStart(plugin.id)}>
+                        启动
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => onDisable(plugin.id)}>
+                        禁用
+                      </button>
+                    </>
+                  )}
+                  {plugin.status === 'Running' && (
+                    <button className="btn btn-secondary btn-sm" onClick={() => onStop(plugin.id)}>
+                      停止
+                    </button>
+                  )}
+                  <button className="btn btn-danger btn-sm" onClick={() => onUnload(plugin.id)}>
+                    卸载
+                  </button>
                 </div>
               </div>
-              <div className="plugin-card-footer">
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={() => onUnload(plugin.id)}
-                >
-                  卸载
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

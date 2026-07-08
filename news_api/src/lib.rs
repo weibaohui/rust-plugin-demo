@@ -7,7 +7,7 @@
 定义了 [`HostContext`] trait，让插件可以反向调用宿主的方法并获取宿主信息。
 */
 
-use dygpi::plugin::Plugin;
+use dygpi::plugin::{CronSpec, Plugin};
 use serde::Serialize;
 
 // 让插件可以嵌入自身的 `ui/dist/` 目录树，并在宿主需要时回放。
@@ -114,6 +114,48 @@ impl Plugin for NewsAgencyPlugin {
     fn on_unload(&self) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' unloaded.", self.agency_name);
         Ok(())
+    }
+
+    fn on_install(&self) -> dygpi::error::Result<()> {
+        log::info!("News agency '{}' installed.", self.agency_name);
+        Ok(())
+    }
+
+    fn on_uninstall(&self) -> dygpi::error::Result<()> {
+        log::info!("News agency '{}' uninstalled.", self.agency_name);
+        Ok(())
+    }
+
+    fn on_enable(&self) -> dygpi::error::Result<()> {
+        log::info!("News agency '{}' enabled.", self.agency_name);
+        Ok(())
+    }
+
+    fn on_disable(&self) -> dygpi::error::Result<()> {
+        log::info!("News agency '{}' disabled.", self.agency_name);
+        Ok(())
+    }
+
+    fn on_start(&self) -> dygpi::error::Result<()> {
+        log::info!("News agency '{}' started.", self.agency_name);
+        Ok(())
+    }
+
+    fn on_stop(&self) -> dygpi::error::Result<()> {
+        log::info!("News agency '{}' stopped.", self.agency_name);
+        Ok(())
+    }
+
+    fn on_cron(&self, name: &str) -> dygpi::error::Result<()> {
+        log::info!("[{}] cron tick: {}", self.agency_name, name);
+        Ok(())
+    }
+
+    fn cron_specs(&self) -> Vec<CronSpec> {
+        vec![CronSpec {
+            name: "heartbeat".to_string(),
+            interval_secs: 30,
+        }]
     }
 }
 
