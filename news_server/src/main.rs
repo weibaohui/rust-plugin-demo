@@ -5,6 +5,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
+use dygpi::error::ErrorKind;
 use dygpi::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
 use dygpi::plugin::{Plugin, PluginStatus};
 use news_api::{HostContext, NewsAgencyPlugin, PluginMenu};
@@ -77,6 +78,21 @@ fn plugin_to_info(p: &NewsAgencyPlugin, status: PluginStatus) -> PluginInfo {
         menu,
         status,
     }
+}
+
+/// 把 dygpi 错误映射为 HTTP 响应:PluginNotFound→404,InvalidPluginState→409,其他→500。
+fn plugin_err_to_response(e: dygpi::error::Error, action: &str) -> (StatusCode, Json<ApiMessage>) {
+    let code = match e.kind() {
+        ErrorKind::PluginNotFound(_) => StatusCode::NOT_FOUND,
+        ErrorKind::InvalidPluginState(_) => StatusCode::CONFLICT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    (
+        code,
+        Json(ApiMessage {
+            message: format!("{}失败: {}", action, e),
+        }),
+    )
 }
 
 #[derive(Serialize)]
@@ -521,14 +537,9 @@ async fn enable_plugin_handler(
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let mut ctx = state.write().unwrap();
-    ctx.manager.enable_plugin(&id).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiMessage {
-                message: format!("启用失败: {:?}", e),
-            }),
-        )
-    })?;
+    ctx.manager
+        .enable_plugin(&id)
+        .map_err(|e| plugin_err_to_response(e, "启用"))?;
     info!("已启用插件 '{}'", id);
     Ok(Json(ApiMessage {
         message: format!("插件 '{}' 已启用", id),
@@ -540,14 +551,9 @@ async fn disable_plugin_handler(
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let mut ctx = state.write().unwrap();
-    ctx.manager.disable_plugin(&id).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiMessage {
-                message: format!("禁用失败: {:?}", e),
-            }),
-        )
-    })?;
+    ctx.manager
+        .disable_plugin(&id)
+        .map_err(|e| plugin_err_to_response(e, "禁用"))?;
     if let Some(flags) = ctx.cron_flags.remove(&id) {
         for f in flags {
             f.store(true, Ordering::Relaxed);
@@ -565,14 +571,9 @@ async fn start_plugin_handler(
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let cron_specs = {
         let mut ctx = state.write().unwrap();
-        ctx.manager.start_plugin(&id).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: format!("启动失败: {:?}", e),
-                }),
-            )
-        })?
+        ctx.manager
+            .start_plugin(&id)
+            .map_err(|e| plugin_err_to_response(e, "启动"))?
     };
     if !cron_specs.is_empty() {
         let plugin = {
@@ -614,14 +615,9 @@ async fn stop_plugin_handler(
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     {
         let mut ctx = state.write().unwrap();
-        ctx.manager.stop_plugin(&id).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: format!("停止失败: {:?}", e),
-                }),
-            )
-        })?;
+        ctx.manager
+            .stop_plugin(&id)
+            .map_err(|e| plugin_err_to_response(e, "停止"))?;
         if let Some(flags) = ctx.cron_flags.remove(&id) {
             for f in flags {
                 f.store(true, Ordering::Relaxed);

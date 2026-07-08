@@ -44,6 +44,12 @@ pub enum ErrorKind {
     /// 参数为未找到的插件类型标识符。
     ///
     UnknownPluginManagerType(String),
+    /// 插件不存在(未加载或已卸载)。参数为插件 ID。
+    ///
+    PluginNotFound(String),
+    /// 插件状态不符合操作要求(如非 Loaded 时 enable)。参数为说明。
+    ///
+    InvalidPluginState(String),
 }
 
 ///
@@ -81,6 +87,8 @@ impl Display for ErrorKind {
                     format!("Plugin(s) failed to register; error: '{}'", error),
                 ErrorKind::UnknownPluginManagerType(plugin_type) =>
                     format!("No Configured plugins for type '{}'", plugin_type),
+                ErrorKind::PluginNotFound(id) => format!("Plugin '{}' not found", id),
+                ErrorKind::InvalidPluginState(msg) => format!("Invalid plugin state: {}", msg),
             }
         )
     }
@@ -95,6 +103,13 @@ impl Display for Error {
 impl From<ErrorKind> for Error {
     fn from(v: ErrorKind) -> Self {
         Self(v)
+    }
+}
+
+impl Error {
+    /// 返回错误类别。
+    pub fn kind(&self) -> &ErrorKind {
+        &self.0
     }
 }
 

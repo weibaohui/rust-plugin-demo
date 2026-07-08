@@ -417,51 +417,78 @@ where
     }
 
     /// 启用插件:`Loaded → Enabled`,调用 `on_enable`。
+    /// 插件不存在返回 `PluginNotFound`;状态非 Loaded 返回 `InvalidPluginState`。
     pub fn enable_plugin(&mut self, plugin_id: &str) -> Result<()> {
         let mut plugins = self.plugins.write().unwrap();
-        if let Some(plugin) = plugins.get_mut(plugin_id) {
-            if plugin.status == PluginStatus::Loaded {
-                plugin.plugin.on_enable()?;
-                plugin.status = PluginStatus::Enabled;
-            }
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
+        if plugin.status != PluginStatus::Loaded {
+            return Err(ErrorKind::InvalidPluginState(format!(
+                "cannot enable '{}': current {:?}, expected Loaded",
+                plugin_id, plugin.status
+            ))
+            .into());
         }
+        plugin.plugin.on_enable()?;
+        plugin.status = PluginStatus::Enabled;
         Ok(())
     }
 
     /// 禁用插件:`Enabled → Loaded`,调用 `on_disable`。
+    /// 插件不存在返回 `PluginNotFound`;状态非 Enabled 返回 `InvalidPluginState`。
     pub fn disable_plugin(&mut self, plugin_id: &str) -> Result<()> {
         let mut plugins = self.plugins.write().unwrap();
-        if let Some(plugin) = plugins.get_mut(plugin_id) {
-            if plugin.status == PluginStatus::Enabled {
-                plugin.plugin.on_disable()?;
-                plugin.status = PluginStatus::Loaded;
-            }
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
+        if plugin.status != PluginStatus::Enabled {
+            return Err(ErrorKind::InvalidPluginState(format!(
+                "cannot disable '{}': current {:?}, expected Enabled",
+                plugin_id, plugin.status
+            ))
+            .into());
         }
+        plugin.plugin.on_disable()?;
+        plugin.status = PluginStatus::Loaded;
         Ok(())
     }
 
     /// 启动插件:`Enabled → Running`,调用 `on_start`,返回 `cron_specs` 供宿主调度。
+    /// 插件不存在返回 `PluginNotFound`;状态非 Enabled 返回 `InvalidPluginState`。
     pub fn start_plugin(&mut self, plugin_id: &str) -> Result<Vec<CronSpec>> {
         let mut plugins = self.plugins.write().unwrap();
-        if let Some(plugin) = plugins.get_mut(plugin_id) {
-            if plugin.status == PluginStatus::Enabled {
-                plugin.plugin.on_start()?;
-                plugin.status = PluginStatus::Running;
-                return Ok(plugin.plugin.cron_specs());
-            }
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
+        if plugin.status != PluginStatus::Enabled {
+            return Err(ErrorKind::InvalidPluginState(format!(
+                "cannot start '{}': current {:?}, expected Enabled",
+                plugin_id, plugin.status
+            ))
+            .into());
         }
-        Ok(Vec::new())
+        plugin.plugin.on_start()?;
+        plugin.status = PluginStatus::Running;
+        Ok(plugin.plugin.cron_specs())
     }
 
     /// 停止插件:`Running → Enabled`,调用 `on_stop`。
+    /// 插件不存在返回 `PluginNotFound`;状态非 Running 返回 `InvalidPluginState`。
     pub fn stop_plugin(&mut self, plugin_id: &str) -> Result<()> {
         let mut plugins = self.plugins.write().unwrap();
-        if let Some(plugin) = plugins.get_mut(plugin_id) {
-            if plugin.status == PluginStatus::Running {
-                plugin.plugin.on_stop()?;
-                plugin.status = PluginStatus::Enabled;
-            }
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
+        if plugin.status != PluginStatus::Running {
+            return Err(ErrorKind::InvalidPluginState(format!(
+                "cannot stop '{}': current {:?}, expected Running",
+                plugin_id, plugin.status
+            ))
+            .into());
         }
+        plugin.plugin.on_stop()?;
+        plugin.status = PluginStatus::Enabled;
         Ok(())
     }
 
@@ -589,5 +616,37 @@ mod tests {
         assert_eq!(file_name.to_str().unwrap(), EXPECTED_FILE);
         let file_name = make_platform_dylib_name("my_lib.foo".as_ref());
         assert_eq!(file_name.to_str().unwrap(), EXPECTED_FILE);
+    }
+
+    #[derive(Debug)]
+    struct MockPlugin {
+        id: String,
+    }
+
+    impl Plugin for MockPlugin {
+        fn plugin_id(&self) -> &String {
+            &self.id
+        }
+    }
+
+    #[test]
+    fn test_state_machine_plugin_not_found() {
+        let mut mgr: PluginManager<MockPlugin> = PluginManager::default();
+        assert!(matches!(
+            mgr.enable_plugin("missing").unwrap_err().kind(),
+            ErrorKind::PluginNotFound(_)
+        ));
+        assert!(matches!(
+            mgr.disable_plugin("missing").unwrap_err().kind(),
+            ErrorKind::PluginNotFound(_)
+        ));
+        assert!(matches!(
+            mgr.start_plugin("missing").unwrap_err().kind(),
+            ErrorKind::PluginNotFound(_)
+        ));
+        assert!(matches!(
+            mgr.stop_plugin("missing").unwrap_err().kind(),
+            ErrorKind::PluginNotFound(_)
+        ));
     }
 }
