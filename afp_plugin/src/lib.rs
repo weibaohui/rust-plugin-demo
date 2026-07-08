@@ -7,7 +7,7 @@
 
 use dygpi::plugin::PluginRegistrar;
 use include_dir::{include_dir, Dir};
-use news_api::{afp_format, NewsAgencyPlugin};
+use news_api::{afp_format, NewsAgencyPlugin, PluginMenu};
 
 // ------------------------------------------------------------------------------------------------
 // 编译期嵌入的 `ui/dist/` 目录
@@ -27,7 +27,23 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
         NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
             // 将嵌入的 ui/dist 绑定到本插件实例，基目录 "afp_plugin/ui"，
             // 宿主 news_server 据此从内存服务 qiankun 子应用。
-            .with_ui_dist("afp_plugin/ui", &UI_DIST),
+            .with_ui_dist("afp_plugin/ui", &UI_DIST)
+            // 声明左侧菜单：法新社分组 → 控制面板（点击进入 qiankun 子应用）。
+            .with_menu(PluginMenu {
+                key: "afp".into(),
+                title: "法新社".into(),
+                icon: Some("📡".into()),
+                route: None,
+                order: 100,
+                children: vec![PluginMenu {
+                    key: "panel".into(),
+                    title: "控制面板".into(),
+                    icon: None,
+                    route: Some(format!("/plugin/{}", PLUGIN_ID)),
+                    order: 0,
+                    children: vec![],
+                }],
+            }),
     );
 }
 

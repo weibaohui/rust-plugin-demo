@@ -1,0 +1,10 @@
+Total messages: 9 (Errors: 2, Warnings: 3)
+Returning 7 messages for level "info"
+
+[INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5175/node_modules/.vite/deps/react-dom_client.js?v=1fa958eb:20102
+[ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5175/favicon.ico:0
+[LOG] [qiankun] before-load afp_plugin::afp_plugin::AfpAgency @ http://localhost:5175/src/micro.ts:25
+[WARNING] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3984
+[WARNING] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3984
+[WARNING] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3984
+[ERROR] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3981

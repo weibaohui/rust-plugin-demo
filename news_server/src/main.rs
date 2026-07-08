@@ -7,7 +7,7 @@ use axum::{
 };
 use dygpi::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
 use dygpi::plugin::Plugin;
-use news_api::{HostContext, NewsAgencyPlugin};
+use news_api::{HostContext, NewsAgencyPlugin, PluginMenu};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -51,6 +51,8 @@ struct PluginInfo {
     /// qiankun 子应用入口（相对路径，如 "/plugin-files/afp_plugin/ui/dist/index.html"），
     /// 由 server 根据 ui_base_dir 计算；has_ui 为 false 时为 None。
     ui_entry: Option<String>,
+    /// 插件声明的菜单树（供前端 Sidebar 渲染）。
+    menu: Vec<PluginMenu>,
 }
 
 /// 把插件转为前端可消费的 PluginInfo：has_ui 与 qiankun 入口均由 ui_base_dir/ui_dist 推导。
@@ -62,6 +64,7 @@ fn plugin_to_info(p: &NewsAgencyPlugin) -> PluginInfo {
         ui_entry: p
             .ui_base_dir()
             .map(|d| format!("/plugin-files/{}/dist/index.html", d)),
+        menu: p.menus().to_vec(),
     }
 }
 

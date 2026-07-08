@@ -1,0 +1,41 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 📡
+      - generic [ref=e7]: 新闻插件管理系统
+      - generic [ref=e8]: v0.1
+    - navigation [ref=e9]:
+      - button "🔌 已加载插件" [ref=e10] [cursor=pointer]
+      - button "📦 插件库管理" [ref=e11] [cursor=pointer]
+      - button "📰 发布新闻" [ref=e12] [cursor=pointer]
+      - button "🎨 插件界面" [ref=e13] [cursor=pointer]
+  - main [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - heading "🔌 已加载的插件 (0)" [level=2] [ref=e17]
+        - button "⟳ 刷新" [ref=e19] [cursor=pointer]
+      - generic [ref=e20]:
+        - strong [ref=e21]: 💡 插件全生命周期管理
+        - list [ref=e22]:
+          - listitem [ref=e23]:
+            - strong [ref=e24]: 发现
+            - text: — 在「插件库管理」中扫描可用的 .dylib 文件
+          - listitem [ref=e25]:
+            - strong [ref=e26]: 加载
+            - text: — 点击加载按钮，框架自动打开动态库、检查版本兼容性、调用注册函数
+          - listitem [ref=e27]:
+            - strong [ref=e28]: 查看
+            - text: — 在此页面查看已加载的插件列表，每个插件有唯一 ID 和机构名称
+          - listitem [ref=e29]:
+            - strong [ref=e30]: 调用
+            - text: — 在「发布新闻」页面选择插件，输入新闻内容，调用 publish() 方法
+          - listitem [ref=e31]:
+            - strong [ref=e32]: 卸载
+            - text: — 卸载单个插件或全部卸载，框架关闭动态库释放资源
+      - generic [ref=e33]:
+        - generic [ref=e34]: 📭
+        - generic [ref=e35]: 尚未加载任何插件
+        - generic [ref=e36]: 请前往「插件库管理」页面扫描并加载插件库
+  - contentinfo [ref=e37]:
+    - generic [ref=e38]: 📋 操作日志
+    - generic [ref=e40]: 暂无操作，加载插件后日志会显示在这里

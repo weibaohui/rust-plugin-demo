@@ -1,0 +1,14 @@
+[     632ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5175/src/micro.ts:0
+[     638ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5175/favicon.ico:0
+[  188729ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  189732ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  190735ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  191738ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  192741ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  193743ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  194746ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  195748ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  196750ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  197752ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  198755ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034
+[  199756ms] [ERROR] WebSocket connection to 'ws://localhost:5175/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:5175/@vite/client:1034

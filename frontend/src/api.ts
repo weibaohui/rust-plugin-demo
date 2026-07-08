@@ -8,6 +8,15 @@ export interface LibraryInfo {
   plugin_count: number;
 }
 
+export interface PluginMenu {
+  key: string;
+  title: string;
+  icon: string | null;
+  route: string | null;
+  order: number;
+  children: PluginMenu[];
+}
+
 export interface PluginInfo {
   id: string;
   agency: string;
@@ -16,6 +25,8 @@ export interface PluginInfo {
   ui_entry: string | null;
   /** qiankun 子应用入口绝对 URL（由 micro.ts 根据 ui_entry + origin 填充）。 */
   qiankunEntry?: string;
+  /** 插件声明的菜单树（供 Sidebar 渲染）。 */
+  menu: PluginMenu[];
 }
 
 export interface ArticleResponse {

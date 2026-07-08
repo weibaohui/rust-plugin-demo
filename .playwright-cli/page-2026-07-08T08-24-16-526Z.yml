@@ -1,0 +1,88 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 📡
+      - generic [ref=e7]: 新闻插件管理系统
+      - generic [ref=e8]: v0.1
+    - navigation "主导航" [ref=e9]:
+      - list [ref=e10]:
+        - listitem [ref=e11]:
+          - button "📦 插件库管理" [ref=e12] [cursor=pointer]:
+            - generic [ref=e13]: 📦
+            - generic [ref=e14]: 插件库管理
+        - listitem [ref=e15]:
+          - button "📰 发布新闻" [ref=e16] [cursor=pointer]:
+            - generic [ref=e17]: 📰
+            - generic [ref=e18]: 发布新闻
+        - listitem [ref=e19]:
+          - button "📡 法新社 ▾" [expanded] [ref=e20] [cursor=pointer]:
+            - generic [ref=e21]: 📡
+            - generic [ref=e22]: 法新社
+            - generic [ref=e23]: ▾
+          - list [ref=e24]:
+            - listitem [ref=e25]:
+              - button "控制面板" [ref=e26] [cursor=pointer]:
+                - generic [ref=e27]: 控制面板
+        - listitem [ref=e28]:
+          - button "📰 路透社 ▾" [expanded] [ref=e29] [cursor=pointer]:
+            - generic [ref=e30]: 📰
+            - generic [ref=e31]: 路透社
+            - generic [ref=e32]: ▾
+          - list [ref=e33]:
+            - listitem [ref=e34]:
+              - button "控制面板" [ref=e35] [cursor=pointer]:
+                - generic [ref=e36]: 控制面板
+  - generic [ref=e37]:
+    - main [ref=e38]:
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - heading "🔌 已加载的插件 (2)" [level=2] [ref=e41]
+          - generic [ref=e42]:
+            - button "⟳ 刷新" [ref=e43] [cursor=pointer]
+            - button "🗑️ 卸载全部" [ref=e44] [cursor=pointer]
+        - generic [ref=e45]:
+          - strong [ref=e46]: 💡 插件全生命周期管理
+          - list [ref=e47]:
+            - listitem [ref=e48]:
+              - strong [ref=e49]: 发现
+              - text: — 在「插件库管理」中扫描可用的 .dylib 文件
+            - listitem [ref=e50]:
+              - strong [ref=e51]: 加载
+              - text: — 点击加载按钮，框架自动打开动态库、检查版本兼容性、调用注册函数
+            - listitem [ref=e52]:
+              - strong [ref=e53]: 查看
+              - text: — 在此页面查看已加载的插件列表，每个插件有唯一 ID 和机构名称
+            - listitem [ref=e54]:
+              - strong [ref=e55]: 调用
+              - text: — 在「发布新闻」页面选择插件，输入新闻内容，调用 publish() 方法
+            - listitem [ref=e56]:
+              - strong [ref=e57]: 卸载
+              - text: — 卸载单个插件或全部卸载，框架关闭动态库释放资源
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - generic [ref=e61]: 🇫🇷
+              - generic [ref=e62]: Agence France-Presse
+            - generic [ref=e63]:
+              - generic [ref=e64]:
+                - generic [ref=e65]: 插件 ID
+                - code [ref=e66]: afp_plugin::afp_plugin::AfpAgency
+              - generic [ref=e67]:
+                - generic [ref=e68]: 状态
+                - generic [ref=e69]: 已加载 ✅
+            - button "卸载" [ref=e71] [cursor=pointer]
+          - generic [ref=e72]:
+            - generic [ref=e73]:
+              - generic [ref=e74]: 📰
+              - generic [ref=e75]: Reuters
+            - generic [ref=e76]:
+              - generic [ref=e77]:
+                - generic [ref=e78]: 插件 ID
+                - code [ref=e79]: reuters_plugin::reuters_plugin::ReutersAgency
+              - generic [ref=e80]:
+                - generic [ref=e81]: 状态
+                - generic [ref=e82]: 已加载 ✅
+            - button "卸载" [ref=e84] [cursor=pointer]
+    - contentinfo [ref=e85]:
+      - generic [ref=e86]: 📋 操作日志
+      - generic [ref=e88]: 暂无操作，加载插件后日志会显示在这里

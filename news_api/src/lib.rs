@@ -8,6 +8,7 @@
 */
 
 use dygpi::plugin::Plugin;
+use serde::Serialize;
 
 // 让插件可以嵌入自身的 `ui/dist/` 目录树，并在宿主需要时回放。
 // 宿主 (`news_server`) 也用同一个类型来遍历目录。
@@ -56,6 +57,28 @@ pub trait HostContext: Send + Sync {
 }
 
 ///
+/// 插件向前端声明的菜单项（参考 k8m 的 `Menu`）。
+///
+/// 插件在 `register_plugins` 时通过 `with_menu(...)` 自描述菜单树；宿主聚合所有
+/// 已加载插件的菜单后交前端 Sidebar 渲染。菜单内容静态，可见性由插件是否加载决定。
+///
+#[derive(Debug, Clone, Serialize)]
+pub struct PluginMenu {
+    /// 菜单唯一标识（插件内唯一）。
+    pub key: String,
+    /// 展示标题。
+    pub title: String,
+    /// 图标（emoji 或 CSS class），可选。
+    pub icon: Option<String>,
+    /// 点击跳转的路由；`None` 表示纯分组节点（仅展开子菜单）。
+    pub route: Option<String>,
+    /// 排序权重，越小越靠前。
+    pub order: i32,
+    /// 子菜单（树形）。
+    pub children: Vec<PluginMenu>,
+}
+
+///
 /// 代表新闻机构的插件。每个机构库使用自己的风格（路透社、法新社、美联社……）
 /// 注册此类型的一个实例。
 ///
@@ -70,6 +93,8 @@ pub struct NewsAgencyPlugin {
     /// 嵌入到插件 .so 中的 `ui/dist/` 目录（编译期嵌入）。
     /// 当设置后，宿主可以从内存中直接服务前端静态文件，无需再访问磁盘。
     ui_dist: Option<&'static Dir<'static>>,
+    /// 插件向前端声明的菜单树。
+    menus: Vec<PluginMenu>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -112,6 +137,7 @@ impl NewsAgencyPlugin {
             format_fn,
             ui_base_dir: None,
             ui_dist: None,
+            menus: vec![],
         }
     }
 
@@ -138,6 +164,29 @@ impl NewsAgencyPlugin {
         self
     }
 
+    ///
+    /// 声明一个菜单项（builder 风格，可链式多次调用）。
+    ///
+    /// 插件自描述菜单树，宿主聚合后交前端 Sidebar 渲染。例如：
+    ///
+    /// ```ignore
+    /// NewsAgencyPlugin::new(...)
+    ///     .with_menu(PluginMenu {
+    ///         key: "afp".into(), title: "法新社".into(), icon: Some("📡".into()),
+    ///         route: None, order: 100,
+    ///         children: vec![PluginMenu {
+    ///             key: "panel".into(), title: "控制面板".into(), icon: None,
+    ///             route: Some(format!("/plugin/{}", PLUGIN_ID)),
+    ///             order: 0, children: vec![],
+    ///         }],
+    ///     })
+    /// ```
+    ///
+    pub fn with_menu(mut self, menu: PluginMenu) -> Self {
+        self.menus.push(menu);
+        self
+    }
+
     /// 返回插件 UI 的基目录（如 `"afp_plugin/ui"`），未声明 UI 则为 None。
     pub fn ui_base_dir(&self) -> Option<&str> {
         self.ui_base_dir.as_deref()
@@ -152,6 +201,11 @@ impl NewsAgencyPlugin {
     /// 插件是否声明了前端 UI（即绑定了嵌入的 `ui_dist`）。
     pub fn has_ui(&self) -> bool {
         self.ui_dist.is_some()
+    }
+
+    /// 返回插件声明的菜单树。
+    pub fn menus(&self) -> &[PluginMenu] {
+        &self.menus
     }
 
     /// 返回人类可读的机构名称。

@@ -1,0 +1,39 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 📡
+      - generic [ref=e7]: 新闻插件管理系统
+      - generic [ref=e8]: v0.1
+    - navigation [ref=e9]:
+      - button "🔌 已加载插件 2" [ref=e10] [cursor=pointer]:
+        - text: 🔌 已加载插件
+        - generic [ref=e11]: "2"
+      - button "📦 插件库管理" [ref=e12] [cursor=pointer]
+      - button "📰 发布新闻" [ref=e13] [cursor=pointer]
+      - button "🎨 插件界面" [ref=e14] [cursor=pointer]
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - button "← 返回" [ref=e18]
+        - generic [ref=e19]: /plugin/afp_plugin::afp_plugin::AfpAgency
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - text: 📡Agence France-Presse
+          - code [ref=e23]: afp_plugin::afp_plugin::AfpAgency
+        - generic [ref=e31]:
+          - heading "📡 法新社控制面板" [level=3] [ref=e32]
+          - paragraph [ref=e33]: 配置 AFP 的默认语言偏好
+          - generic [ref=e34]:
+            - generic [ref=e35]: 语言 (Language)
+            - combobox [ref=e36]:
+              - option "🇫🇷 Français" [selected]
+              - option "🇬🇧 English"
+              - option "🇸🇦 العربية"
+              - option "🇪🇸 Español"
+          - generic [ref=e37]:
+            - generic [ref=e38]: 当前插件 ID
+            - code [ref=e39]: afp_plugin
+          - button "💾 保存设置" [ref=e40] [cursor=pointer]
+  - contentinfo [ref=e24]:
+    - generic [ref=e25]: 📋 操作日志
+    - generic [ref=e27]: 暂无操作，加载插件后日志会显示在这里

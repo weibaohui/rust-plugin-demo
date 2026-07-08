@@ -1,0 +1,5 @@
+[GET] http://localhost:5175/api/plugins => [200] OK
+[GET] http://localhost:5175/api/libraries => [200] OK
+[GET] http://localhost:5175/api/plugins => [200] OK
+[GET] http://localhost:5175/api/libraries => [200] OK
+[GET] http://localhost:5175/plugin-files/afp_plugin/ui/dist/index.html => [200] OK

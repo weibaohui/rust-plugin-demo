@@ -52,3 +52,12 @@ export async function unmount() {
 if (!(window as { __POWERED_BY_QIANKUN__?: boolean }).__POWERED_BY_QIANKUN__) {
   render();
 }
+
+// vite-plugin-qiankun 1.0.15 + vite 6 未自动把生命周期注入到 window.moudleQiankunAppLifeCycles，
+// 手动注入以匹配 entry HTML inline script 的期望（见 dist/index.html 的 createDeffer 机制）。
+const QIANKUN_APP_NAME = 'afp-plugin';
+const qiankunWindow = window as unknown as {
+  moudleQiankunAppLifeCycles?: Record<string, unknown>;
+};
+qiankunWindow.moudleQiankunAppLifeCycles = qiankunWindow.moudleQiankunAppLifeCycles ?? {};
+qiankunWindow.moudleQiankunAppLifeCycles[QIANKUN_APP_NAME] = { bootstrap, mount, update, unmount };
