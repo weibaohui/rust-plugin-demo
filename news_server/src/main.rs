@@ -555,13 +555,22 @@ async fn serve_plugin_ui_handler(
             .manager
             .plugins()
             .iter()
-            .find(|p| p.ui_js_path().map(|s| s.starts_with(&prefix)).unwrap_or(false))
+            .find(|p| {
+                p.ui_js_path()
+                    .map(|s| s.starts_with(&prefix))
+                    .unwrap_or(false)
+            })
             .map(|p| p.plugin_id().clone());
-        match matched_id.and_then(|id| ctx.manager.get(&id).map(|p| p.ui_dist().map(|d| (d, format!("dist/{}", rest.strip_prefix("ui/").unwrap_or(rest)))))) {
-            Some(Some((dist, inner))) => dist
-                .files()
-                .find(|f| f.path() == inner.as_str())
-                .map(|f| f.contents().to_vec()),
+        // include_dir!("ui/dist") 嵌入的 Dir 根就是 ui/dist，内部文件 path 形如
+        // "index.html"、"assets/xxx.js"——所以 inner 必须去掉 "ui/dist/" 前缀，
+        // 而不是再叠加一层 "dist/"。
+        match matched_id.and_then(|id| {
+            ctx.manager.get(&id).map(|p| {
+                p.ui_dist()
+                    .map(|d| (d, rest.strip_prefix("ui/dist/").unwrap_or(rest)))
+            })
+        }) {
+            Some(Some((dist, inner))) => dist.get_file(inner).map(|f| f.contents().to_vec()),
             _ => None,
         }
     }; // lock released here

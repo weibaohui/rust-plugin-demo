@@ -25,11 +25,7 @@ pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
     registrar.register(
         NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
-            .with_ui(
-                PluginModuleType::React,
-                "react",
-                "afp_plugin/ui/panel.js",
-            )
+            .with_ui(PluginModuleType::React, "react", "afp_plugin/ui/panel.js")
             // 将嵌入的 ui/dist/ 绑定到本插件实例，
             // 宿主 news_server 会优先从内存服务。
             .with_ui_dist(&UI_DIST),
