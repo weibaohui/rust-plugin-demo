@@ -9,6 +9,10 @@
 
 use dygpi::plugin::Plugin;
 
+// 让插件可以嵌入自身的 `ui/dist/` 目录树，并在宿主需要时回放。
+// 宿主 (`news_server`) 也用同一个类型来遍历目录。
+pub use include_dir::{Dir, File};
+
 // ------------------------------------------------------------------------------------------------
 // 公开类型
 // ------------------------------------------------------------------------------------------------
@@ -77,6 +81,9 @@ pub struct NewsAgencyPlugin {
     ui_tag_name: Option<String>,
     /// 插件 UI 的 JS 文件路径，相对于项目根目录（如 `"reuters_plugin/ui/panel.js"`）
     ui_js_path: Option<String>,
+    /// 嵌入到插件 .so 中的 `ui/dist/` 目录（编译期嵌入）。
+    /// 当设置后，宿主可以从内存中直接服务前端静态文件，无需再访问磁盘。
+    ui_dist: Option<&'static Dir<'static>>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -120,6 +127,7 @@ impl NewsAgencyPlugin {
             module_type: None,
             ui_tag_name: None,
             ui_js_path: None,
+            ui_dist: None,
         }
     }
 
@@ -137,6 +145,24 @@ impl NewsAgencyPlugin {
         self
     }
 
+    ///
+    /// 将编译期嵌入的 `ui/dist/` 目录绑定到本插件。
+    ///
+    /// 配合 `include_dir!` 宏使用，例如：
+    ///
+    /// ```ignore
+    /// pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
+    /// NewsAgencyPlugin::new(...).with_ui_dist(&UI_DIST)
+    /// ```
+    ///
+    /// 一旦绑定，宿主 `news_server` 会优先从内存中服务插件前端，
+    /// 即使磁盘上的 `ui/dist/` 被删除也能正常工作。
+    ///
+    pub fn with_ui_dist(mut self, dist: &'static Dir<'static>) -> Self {
+        self.ui_dist = Some(dist);
+        self
+    }
+
     /// 返回前端 UI 模块类型（若有）。
     pub fn module_type(&self) -> Option<&PluginModuleType> {
         self.module_type.as_ref()
@@ -150,6 +176,12 @@ impl NewsAgencyPlugin {
     /// 返回插件前端 UI 的 JS 文件路径，相对于项目根目录。
     pub fn ui_js_path(&self) -> Option<&str> {
         self.ui_js_path.as_deref()
+    }
+
+    /// 返回编译期嵌入到插件二进制中的 `ui/dist/` 目录（若有）。
+    /// 宿主优先用此目录服务前端静态文件。
+    pub fn ui_dist(&self) -> Option<&'static Dir<'static>> {
+        self.ui_dist
     }
 
     /// 返回人类可读的机构名称。

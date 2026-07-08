@@ -2,10 +2,20 @@
 法新社（AFP）新闻机构插件。
 
 通过 [`afp_format`] 注册一个配置了法新社格式化风格的 [`NewsAgencyPlugin`] 实例。
+编译期将 `ui/dist/` 嵌入到本插件的 `.so`/`.dylib` 中，使宿主可直接从内存服务前端。
 */
 
 use dygpi::plugin::PluginRegistrar;
+use include_dir::{include_dir, Dir};
 use news_api::{afp_format, NewsAgencyPlugin, PluginModuleType};
+
+// ------------------------------------------------------------------------------------------------
+// 编译期嵌入的 `ui/dist/` 目录
+// ------------------------------------------------------------------------------------------------
+
+/// 由 `include_dir!` 宏在编译期把整个 `afp_plugin/ui/dist/` 目录打包进本 .so。
+/// 路径在二进制内部是只读的，但可以通过 `Dir` 的 API 按需遍历。
+pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 
 // ------------------------------------------------------------------------------------------------
 // 注册
@@ -14,11 +24,15 @@ use news_api::{afp_format, NewsAgencyPlugin, PluginModuleType};
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
     registrar.register(
-        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format).with_ui(
-            PluginModuleType::React,
-            "react",
-            "afp_plugin/ui/panel.js",
-        ),
+        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
+            .with_ui(
+                PluginModuleType::React,
+                "react",
+                "afp_plugin/ui/panel.js",
+            )
+            // 将嵌入的 ui/dist/ 绑定到本插件实例，
+            // 宿主 news_server 会优先从内存服务。
+            .with_ui_dist(&UI_DIST),
     );
 }
 

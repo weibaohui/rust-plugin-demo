@@ -9,3 +9,4 @@ crate-type = ["dylib"]
 [dependencies]
 dygpi = { version = "0.1", path = ".." }
 news_api = { version = "0.1", path = "../news_api" }
+include_dir = "0.7"

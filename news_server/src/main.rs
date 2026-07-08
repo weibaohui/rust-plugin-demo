@@ -528,8 +528,58 @@ async fn plugin_ui_handler(
 // ------------------------------------------------------------------------------------------------
 
 async fn serve_plugin_ui_handler(
+    State(state): State<SharedState>,
     Path(path): Path<String>,
-) -> Result<Response<Body>, (StatusCode, Json<ApiMessage>)> {
+) -> Result<Response<axum::body::Body>, (StatusCode, Json<ApiMessage>)> {
+    // 例如: reuters_plugin/ui/dist/index.html -> (reuters_plugin, ui/dist/index.html)
+    // 或:   reuters_plugin/ui/dist/assets/index-XXX.js -> (reuters_plugin, ui/dist/assets/index-XXX.js)
+    let (plugin_dir, rest) = match path.split_once('/') {
+        Some((d, r)) => (d, r),
+        None => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiMessage {
+                    message: "Invalid plugin path".to_string(),
+                }),
+            ));
+        }
+    };
+
+    // 在已加载的插件中查找：通过 ui_js_path 的前缀匹配 plugin_dir
+    // (例如 ui_js_path = "reuters_plugin/ui/panel.js" 以 "reuters_plugin/" 开头)
+    // 仅做 lookup，立刻释放 lock 再走后续路径（避免持有 RwLockReadGuard 跨 .await）。
+    let prefix = format!("{}/", plugin_dir);
+    let embed_bytes: Option<Vec<u8>> = {
+        let ctx = state.read().unwrap();
+        let matched_id = ctx
+            .manager
+            .plugins()
+            .iter()
+            .find(|p| p.ui_js_path().map(|s| s.starts_with(&prefix)).unwrap_or(false))
+            .map(|p| p.plugin_id().clone());
+        match matched_id.and_then(|id| ctx.manager.get(&id).map(|p| p.ui_dist().map(|d| (d, format!("dist/{}", rest.strip_prefix("ui/").unwrap_or(rest)))))) {
+            Some(Some((dist, inner))) => dist
+                .files()
+                .find(|f| f.path() == inner.as_str())
+                .map(|f| f.contents().to_vec()),
+            _ => None,
+        }
+    }; // lock released here
+
+    // 1) 命中编译期嵌入的 ui_dist
+    if let Some(body) = embed_bytes {
+        let inner_path = rest.strip_prefix("ui/").unwrap_or(rest);
+        let mime = mime_guess::from_path(inner_path)
+            .first_or_octet_stream()
+            .to_string();
+        let response = Response::builder()
+            .header("Content-Type", mime)
+            .body(Body::from(body))
+            .unwrap();
+        return Ok(response);
+    }
+
+    // 2) 落回到磁盘读
     // 基于可执行文件路径推断项目根，避免 CWD 依赖
     let exe_path = std::env::current_exe().map_err(|_| {
         (
@@ -540,7 +590,7 @@ async fn serve_plugin_ui_handler(
         )
     })?;
     let project_root = exe_path
-        .parent() // debug/
+        .parent() // debug/ 或 release/
         .and_then(|p| p.parent()) // target/
         .and_then(|p| p.parent()) // 项目根
         .ok_or_else(|| {
@@ -576,12 +626,16 @@ async fn serve_plugin_ui_handler(
     })?;
 
     // 根据扩展名设置 Content-Type
-    let content_type = if path.ends_with(".js") {
+    let content_type = if path.ends_with(".js") || path.ends_with(".mjs") {
         "application/javascript; charset=utf-8"
     } else if path.ends_with(".css") {
         "text/css; charset=utf-8"
     } else if path.ends_with(".html") {
         "text/html; charset=utf-8"
+    } else if path.ends_with(".json") {
+        "application/json; charset=utf-8"
+    } else if path.ends_with(".map") {
+        "application/json; charset=utf-8"
     } else {
         "application/octet-stream"
     };
