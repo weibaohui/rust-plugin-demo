@@ -7,7 +7,7 @@
 
 use dygpi::plugin::PluginRegistrar;
 use include_dir::{include_dir, Dir};
-use news_api::{afp_format, NewsAgencyPlugin, PluginModuleType};
+use news_api::{afp_format, NewsAgencyPlugin};
 
 // ------------------------------------------------------------------------------------------------
 // 编译期嵌入的 `ui/dist/` 目录
@@ -25,10 +25,9 @@ pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
     registrar.register(
         NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
-            .with_ui(PluginModuleType::React, "react", "afp_plugin/ui/panel.js")
-            // 将嵌入的 ui/dist/ 绑定到本插件实例，
-            // 宿主 news_server 会优先从内存服务。
-            .with_ui_dist(&UI_DIST),
+            // 将嵌入的 ui/dist 绑定到本插件实例，基目录 "afp_plugin/ui"，
+            // 宿主 news_server 据此从内存服务 qiankun 子应用。
+            .with_ui_dist("afp_plugin/ui", &UI_DIST),
     );
 }
 

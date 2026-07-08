@@ -20,19 +20,14 @@ interface QiankunRegistration {
 }
 
 /**
- * 根据 plugin.ui_js_path（如 `reuters_plugin/ui/panel.js`）推算 qiankun 子应用入口：
- *   http(s)://<host>:<port>/plugin-files/<dir>/dist/index.html
- *
- * 返回 undefined 表示该插件不可作为 qiankun 子应用挂载。
+ * 返回插件 qiankun 子应用的绝对入口 URL。
+ * 入口相对路径由 server 通过 plugin.ui_entry 提供（如
+ * "/plugin-files/afp_plugin/ui/dist/index.html"），这里仅拼上 origin。
+ * 返回 undefined 表示该插件无可挂载的 UI。
  */
 export function qiankunEntryFor(plugin: PluginInfo, origin: string): string | undefined {
-  if (!plugin.has_ui || !plugin.ui_js_path) return undefined;
-  // 取目录部分（去掉末尾的文件名），然后拼接 dist/index.html
-  const dir = plugin.ui_js_path.replace(/[^/]+$/, '');
-  // 必须以 / 开头并经 /plugin-files/ 转发到 Rust news_server
-  const path = `/plugin-files/${dir}dist/index.html`;
-  if (path.includes('//')) return undefined;
-  return `${origin}${path}`;
+  if (!plugin.has_ui || !plugin.ui_entry) return undefined;
+  return `${origin}${plugin.ui_entry}`;
 }
 
 /**

@@ -12,27 +12,10 @@ export interface PluginInfo {
   id: string;
   agency: string;
   has_ui: boolean;
-  module_type: string | null;
-  ui_tag_name: string | null;
-  ui_js_path: string | null;
-  /**
-   * qiankun 子应用入口 URL（由 micro.ts 计算并填充）。
-   * 仅当插件编译为 qiankun 微前端时存在；前端使用此字段作为
-   * `registerMicroApps` 的 entry。
-   */
+  /** qiankun 子应用入口相对路径（如 "/plugin-files/afp_plugin/ui/dist/index.html"），由 server 计算。 */
+  ui_entry: string | null;
+  /** qiankun 子应用入口绝对 URL（由 micro.ts 根据 ui_entry + origin 填充）。 */
   qiankunEntry?: string;
-}
-
-export interface PluginUiInfo {
-  tag_name: string;
-  js_url: string;
-  module_type: string;
-}
-
-export async function getPluginUi(id: string): Promise<PluginUiInfo> {
-  const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/ui`);
-  if (!res.ok) throw new Error('该插件没有关联的 UI');
-  return res.json();
 }
 
 export interface ArticleResponse {

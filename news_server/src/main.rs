@@ -48,16 +48,21 @@ struct PluginInfo {
     id: String,
     agency: String,
     has_ui: bool,
-    module_type: Option<String>,
-    ui_tag_name: Option<String>,
-    ui_js_path: Option<String>,
+    /// qiankun 子应用入口（相对路径，如 "/plugin-files/afp_plugin/ui/dist/index.html"），
+    /// 由 server 根据 ui_base_dir 计算；has_ui 为 false 时为 None。
+    ui_entry: Option<String>,
 }
 
-#[derive(Serialize)]
-struct PluginUiInfo {
-    tag_name: String,
-    js_url: String,
-    module_type: String,
+/// 把插件转为前端可消费的 PluginInfo：has_ui 与 qiankun 入口均由 ui_base_dir/ui_dist 推导。
+fn plugin_to_info(p: &NewsAgencyPlugin) -> PluginInfo {
+    PluginInfo {
+        id: p.plugin_id().clone(),
+        agency: p.agency_name().to_string(),
+        has_ui: p.has_ui(),
+        ui_entry: p
+            .ui_base_dir()
+            .map(|d| format!("/plugin-files/{}/dist/index.html", d)),
+    }
 }
 
 #[derive(Serialize)]
@@ -148,7 +153,6 @@ async fn main() {
             get(get_plugin_handler).delete(unload_plugin_handler),
         )
         .route("/api/plugins/:id/publish", post(publish_handler))
-        .route("/api/plugins/:id/ui", get(plugin_ui_handler))
         // 批量操作
         .route("/api/plugins", delete(unload_all_handler))
         // 插件前端 UI 静态文件
@@ -314,16 +318,7 @@ async fn load_library_handler(
 
     let new_plugins: Vec<PluginInfo> = new_ids
         .iter()
-        .filter_map(|id| {
-            ctx.manager.get(id).map(|p| PluginInfo {
-                id: p.plugin_id().clone(),
-                agency: p.agency_name().to_string(),
-                has_ui: p.ui_tag_name().is_some(),
-                module_type: p.module_type().map(|mt| format!("{:?}", mt).to_lowercase()),
-                ui_tag_name: p.ui_tag_name().map(|s| s.to_string()),
-                ui_js_path: p.ui_js_path().map(|s| s.to_string()),
-            })
-        })
+        .filter_map(|id| ctx.manager.get(id).map(|p| plugin_to_info(&*p)))
         .collect();
 
     info!("已加载插件库，新增 {} 个插件", new_plugins.len());
@@ -339,19 +334,7 @@ async fn load_library_handler(
 async fn list_plugins_handler(State(state): State<SharedState>) -> Json<Vec<PluginInfo>> {
     let ctx = state.read().unwrap();
     let plugins = ctx.manager.plugins();
-    Json(
-        plugins
-            .iter()
-            .map(|p| PluginInfo {
-                id: p.plugin_id().clone(),
-                agency: p.agency_name().to_string(),
-                has_ui: p.ui_tag_name().is_some(),
-                module_type: p.module_type().map(|mt| format!("{:?}", mt).to_lowercase()),
-                ui_tag_name: p.ui_tag_name().map(|s| s.to_string()),
-                ui_js_path: p.ui_js_path().map(|s| s.to_string()),
-            })
-            .collect(),
-    )
+    Json(plugins.iter().map(|p| plugin_to_info(&**p)).collect())
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -372,16 +355,7 @@ async fn get_plugin_handler(
         )
     })?;
 
-    Ok(Json(PluginInfo {
-        id: plugin.plugin_id().clone(),
-        agency: plugin.agency_name().to_string(),
-        has_ui: plugin.ui_tag_name().is_some(),
-        module_type: plugin
-            .module_type()
-            .map(|mt| format!("{:?}", mt).to_lowercase()),
-        ui_tag_name: plugin.ui_tag_name().map(|s| s.to_string()),
-        ui_js_path: plugin.ui_js_path().map(|s| s.to_string()),
-    }))
+    Ok(Json(plugin_to_info(&*plugin)))
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -481,49 +455,6 @@ async fn unload_all_handler(State(state): State<SharedState>) -> Json<ApiMessage
 }
 
 // ------------------------------------------------------------------------------------------------
-// 获取插件 UI 元数据
-// ------------------------------------------------------------------------------------------------
-
-async fn plugin_ui_handler(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> Result<Json<PluginUiInfo>, (StatusCode, Json<ApiMessage>)> {
-    let ctx = state.read().unwrap();
-    let plugin = ctx.manager.get(&id).ok_or_else(|| {
-        (
-            StatusCode::NOT_FOUND,
-            Json(ApiMessage {
-                message: format!("未找到插件 '{}'", id),
-            }),
-        )
-    })?;
-
-    let tag_name = plugin
-        .ui_tag_name()
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ApiMessage {
-                    message: format!("插件 '{}' 没有关联的 UI", id),
-                }),
-            )
-        })?
-        .to_string();
-
-    let js_path = plugin.ui_js_path().unwrap_or("").to_string();
-    let module_type = plugin
-        .module_type()
-        .map(|mt| format!("{:?}", mt).to_lowercase())
-        .unwrap_or_else(|| "web-component".to_string());
-
-    Ok(Json(PluginUiInfo {
-        tag_name,
-        js_url: format!("/plugin-files/{}", js_path),
-        module_type,
-    }))
-}
-
-// ------------------------------------------------------------------------------------------------
 // 服务插件前端 UI 静态文件
 // ------------------------------------------------------------------------------------------------
 
@@ -531,54 +462,25 @@ async fn serve_plugin_ui_handler(
     State(state): State<SharedState>,
     Path(path): Path<String>,
 ) -> Result<Response<axum::body::Body>, (StatusCode, Json<ApiMessage>)> {
-    // 例如: reuters_plugin/ui/dist/index.html -> (reuters_plugin, ui/dist/index.html)
-    // 或:   reuters_plugin/ui/dist/assets/index-XXX.js -> (reuters_plugin, ui/dist/assets/index-XXX.js)
-    let (plugin_dir, rest) = match path.split_once('/') {
-        Some((d, r)) => (d, r),
-        None => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ApiMessage {
-                    message: "Invalid plugin path".to_string(),
-                }),
-            ));
-        }
-    };
-
-    // 在已加载的插件中查找：通过 ui_js_path 的前缀匹配 plugin_dir
-    // (例如 ui_js_path = "reuters_plugin/ui/panel.js" 以 "reuters_plugin/" 开头)
-    // 仅做 lookup，立刻释放 lock 再走后续路径（避免持有 RwLockReadGuard 跨 .await）。
-    let prefix = format!("{}/", plugin_dir);
-    let embed_bytes: Option<Vec<u8>> = {
+    // path 形如 "afp_plugin/ui/dist/index.html" 或 ".../assets/xxx.js"。
+    // 在已加载插件中找 ui_base_dir 使 path 以 "{base_dir}/dist/" 开头，
+    // 命中则从编译期嵌入的 ui_dist 取文件；否则落回磁盘（开发模式）。
+    // 仅做 lookup，立刻释放 lock（避免 RwLockReadGuard 跨 .await）。
+    let embed_bytes: Option<(String, Vec<u8>)> = {
         let ctx = state.read().unwrap();
-        let matched_id = ctx
-            .manager
-            .plugins()
-            .iter()
-            .find(|p| {
-                p.ui_js_path()
-                    .map(|s| s.starts_with(&prefix))
-                    .unwrap_or(false)
-            })
-            .map(|p| p.plugin_id().clone());
-        // include_dir!("ui/dist") 嵌入的 Dir 根就是 ui/dist，内部文件 path 形如
-        // "index.html"、"assets/xxx.js"——所以 inner 必须去掉 "ui/dist/" 前缀，
-        // 而不是再叠加一层 "dist/"。
-        match matched_id.and_then(|id| {
-            ctx.manager.get(&id).map(|p| {
-                p.ui_dist()
-                    .map(|d| (d, rest.strip_prefix("ui/dist/").unwrap_or(rest)))
-            })
-        }) {
-            Some(Some((dist, inner))) => dist.get_file(inner).map(|f| f.contents().to_vec()),
-            _ => None,
-        }
+        ctx.manager.plugins().iter().find_map(|p| {
+            let base = p.ui_base_dir()?;
+            let prefix = format!("{}/dist/", base);
+            let rest = path.strip_prefix(&prefix)?;
+            let dist = p.ui_dist()?;
+            let file = dist.get_file(rest)?;
+            Some((rest.to_string(), file.contents().to_vec()))
+        })
     }; // lock released here
 
     // 1) 命中编译期嵌入的 ui_dist
-    if let Some(body) = embed_bytes {
-        let inner_path = rest.strip_prefix("ui/").unwrap_or(rest);
-        let mime = mime_guess::from_path(inner_path)
+    if let Some((inner, body)) = embed_bytes {
+        let mime = mime_guess::from_path(&inner)
             .first_or_octet_stream()
             .to_string();
         let response = Response::builder()

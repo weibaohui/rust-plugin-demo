@@ -18,17 +18,6 @@ pub use include_dir::{Dir, File};
 // ------------------------------------------------------------------------------------------------
 
 ///
-/// 插件前端 UI 模块类型。
-///
-#[derive(Debug, Clone, PartialEq)]
-pub enum PluginModuleType {
-    /// 传统 Web Component（通过 `<script>` 加载，`customElements.define()`）。
-    WebComponent,
-    /// React ESM 模块（通过 `import()` 加载，导出 `mount(container, deps)`）。
-    React,
-}
-
-///
 /// 由插件的 `publish` 方法产生的新闻文章。
 ///
 #[derive(Debug, Clone)]
@@ -75,12 +64,9 @@ pub struct NewsAgencyPlugin {
     id: String,
     agency_name: String,
     format_fn: fn(ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArticle,
-    /// 前端 UI 模块类型（React ESM 或 Web Component）
-    module_type: Option<PluginModuleType>,
-    /// 自定义 HTML 标签名（Web Component）或组件标识名
-    ui_tag_name: Option<String>,
-    /// 插件 UI 的 JS 文件路径，相对于项目根目录（如 `"reuters_plugin/ui/panel.js"`）
-    ui_js_path: Option<String>,
+    /// 插件 UI 的基目录（相对项目根，如 `"afp_plugin/ui"`），其下应有 qiankun
+    /// 子应用产物 `dist/`。宿主据此把 `/plugin-files/...` URL 映射回本插件。
+    ui_base_dir: Option<String>,
     /// 嵌入到插件 .so 中的 `ui/dist/` 目录（编译期嵌入）。
     /// 当设置后，宿主可以从内存中直接服务前端静态文件，无需再访问磁盘。
     ui_dist: Option<&'static Dir<'static>>,
@@ -124,64 +110,48 @@ impl NewsAgencyPlugin {
             id: id.to_string(),
             agency_name: agency_name.to_string(),
             format_fn,
-            module_type: None,
-            ui_tag_name: None,
-            ui_js_path: None,
+            ui_base_dir: None,
             ui_dist: None,
         }
     }
 
     ///
-    /// 设置插件 UI 元数据并返回自身（builder 风格）。
+    /// 将编译期嵌入的 `ui/dist/` 目录绑定到本插件，并声明其基目录。
     ///
-    /// * `module_type` — 前端 UI 模块类型（`React` 或 `WebComponent`）。
-    /// * `tag_name` — 组件标识，React 插件用 `"react"`，Web Component 用自定义标签名。
-    /// * `js_path` — JS 文件路径，相对于项目根目录，如 `"reuters_plugin/ui/panel.js"`。
-    ///
-    pub fn with_ui(mut self, module_type: PluginModuleType, tag_name: &str, js_path: &str) -> Self {
-        self.module_type = Some(module_type);
-        self.ui_tag_name = Some(tag_name.to_string());
-        self.ui_js_path = Some(js_path.to_string());
-        self
-    }
-
-    ///
-    /// 将编译期嵌入的 `ui/dist/` 目录绑定到本插件。
+    /// `base_dir` 是 UI 相对项目根的目录（如 `"afp_plugin/ui"`），其下应有
+    /// qiankun 子应用产物 `dist/index.html`。宿主据此把 `/plugin-files/...`
+    /// URL 映射回本插件，并优先从内存服务。
     ///
     /// 配合 `include_dir!` 宏使用，例如：
     ///
     /// ```ignore
     /// pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
-    /// NewsAgencyPlugin::new(...).with_ui_dist(&UI_DIST)
+    /// NewsAgencyPlugin::new(...).with_ui_dist("afp_plugin/ui", &UI_DIST)
     /// ```
     ///
     /// 一旦绑定，宿主 `news_server` 会优先从内存中服务插件前端，
     /// 即使磁盘上的 `ui/dist/` 被删除也能正常工作。
     ///
-    pub fn with_ui_dist(mut self, dist: &'static Dir<'static>) -> Self {
+    pub fn with_ui_dist(mut self, base_dir: &str, dist: &'static Dir<'static>) -> Self {
+        self.ui_base_dir = Some(base_dir.to_string());
         self.ui_dist = Some(dist);
         self
     }
 
-    /// 返回前端 UI 模块类型（若有）。
-    pub fn module_type(&self) -> Option<&PluginModuleType> {
-        self.module_type.as_ref()
-    }
-
-    /// 返回插件前端 UI 的组件标识（HTML 标签名或标识名）。
-    pub fn ui_tag_name(&self) -> Option<&str> {
-        self.ui_tag_name.as_deref()
-    }
-
-    /// 返回插件前端 UI 的 JS 文件路径，相对于项目根目录。
-    pub fn ui_js_path(&self) -> Option<&str> {
-        self.ui_js_path.as_deref()
+    /// 返回插件 UI 的基目录（如 `"afp_plugin/ui"`），未声明 UI 则为 None。
+    pub fn ui_base_dir(&self) -> Option<&str> {
+        self.ui_base_dir.as_deref()
     }
 
     /// 返回编译期嵌入到插件二进制中的 `ui/dist/` 目录（若有）。
     /// 宿主优先用此目录服务前端静态文件。
     pub fn ui_dist(&self) -> Option<&'static Dir<'static>> {
         self.ui_dist
+    }
+
+    /// 插件是否声明了前端 UI（即绑定了嵌入的 `ui_dist`）。
+    pub fn has_ui(&self) -> bool {
+        self.ui_dist.is_some()
     }
 
     /// 返回人类可读的机构名称。
