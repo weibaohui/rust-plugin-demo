@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import './App.css';
 import Navbar from './components/Navbar';
@@ -8,8 +8,35 @@ import PluginUi from './components/PluginUi';
 import PublishForm from './components/PublishForm';
 import type { PluginInfo, LibraryInfo, ArticleResponse } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, publishArticle } from './api';
+import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 
 type Tab = 'plugins' | 'libraries' | 'publish' | 'ui';
+
+/**
+ * Very small client-side router keyed off `window.location.pathname`.
+ * Supports:
+ *   /                → default tab
+ *   /plugin/<id>     → render <PluginUi> for the matching loaded plugin
+ */
+function useRoute() {
+  const [path, setPath] = useState<string>(() =>
+    typeof window === 'undefined' ? '/' : window.location.pathname || '/',
+  );
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname || '/');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  return path;
+}
+
+function navigate(to: string) {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname !== to) {
+    window.history.pushState({}, '', to);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('plugins');
@@ -50,6 +77,21 @@ export default function App() {
     refreshPlugins();
     refreshLibraries();
   }, [refreshPlugins, refreshLibraries]);
+
+  // 一旦插件列表发生变化，为每个有 UI 的插件填充 qiankunEntry，
+  // 然后调用 registerLoadedPlugins()（仅执行一次，后续重复调用会被 qiankun 去重）。
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    const enriched = plugins.map(p => ({
+      ...p,
+      qiankunEntry: qiankunEntryFor(p, origin),
+    }));
+    registerLoadedPlugins(enriched, origin).catch(err => {
+      // eslint-disable-next-line no-console
+      console.error('qiankun registerLoadedPlugins failed', err);
+    });
+  }, [plugins]);
 
   // 加载插件库
   const handleLoad = async (name: string) => {
@@ -121,16 +163,33 @@ export default function App() {
   const tabs: { key: Tab; label: string; icon: ReactNode }[] = [
     { key: 'plugins', label: '已加载插件', icon: '🔌' },
     { key: 'libraries', label: '插件库管理', icon: '📦' },
-    { key: 'ui', label: '插件界面', icon: '🎨' },
     { key: 'publish', label: '发布新闻', icon: '📰' },
+    { key: 'ui', label: '插件界面', icon: '🎨' },
   ];
+
+  // ────────── 路由：/plugin/<id> → qiankun 子应用容器 ──────────
+  const routePath = useRoute();
+  const pluginRouteMatch = useMemo(() => {
+    const m = /^\/plugin\/(.+)$/.exec(routePath);
+    return m ? decodeURIComponent(m[1]) : null;
+  }, [routePath]);
+
+  const routedPlugin = useMemo(() => {
+    if (!pluginRouteMatch) return null;
+    return plugins.find(p => p.id === pluginRouteMatch) ?? null;
+  }, [pluginRouteMatch, plugins]);
+
+  const handleTabChange = useCallback((key: string) => {
+    setActiveTab(key as Tab);
+    navigate('/');
+  }, []);
 
   return (
     <div className="app-container">
       <Navbar
         tabs={tabs}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         pluginCount={plugins.length}
       />
 
@@ -141,34 +200,69 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'plugins' && (
-          <PluginList
-            plugins={plugins}
-            onUnload={handleUnload}
-            onUnloadAll={handleUnloadAll}
-            onRefresh={refreshPlugins}
-          />
-        )}
+        {pluginRouteMatch ? (
+          <div className="plugin-route">
+            <div className="plugin-route-header">
+              <button className="back-btn" onClick={() => navigate('/')}>
+                ← 返回
+              </button>
+              <span className="route-path">/plugin/{pluginRouteMatch}</span>
+            </div>
+            {routedPlugin ? (
+              <PluginUi plugin={routedPlugin} />
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">🚫</div>
+                <h3>插件未加载</h3>
+                <p>找不到 id 为 <code>{pluginRouteMatch}</code> 的插件，可能尚未加载或已被卸载。</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {activeTab === 'plugins' && (
+              <PluginList
+                plugins={plugins}
+                onUnload={handleUnload}
+                onUnloadAll={handleUnloadAll}
+                onRefresh={refreshPlugins}
+              />
+            )}
 
-        {activeTab === 'libraries' && (
-          <LibraryList
-            libraries={libraries}
-            onLoad={handleLoad}
-            onRefresh={refreshLibraries}
-            plugins={plugins}
-          />
-        )}
+            {activeTab === 'libraries' && (
+              <LibraryList
+                libraries={libraries}
+                onLoad={handleLoad}
+                onRefresh={refreshLibraries}
+              />
+            )}
 
-        {activeTab === 'publish' && (
-          <PublishForm
-            plugins={plugins}
-            onPublish={handlePublish}
-            onRefreshPlugins={refreshPlugins}
-          />
-        )}
+            {activeTab === 'publish' && (
+              <PublishForm
+                plugins={plugins}
+                onPublish={handlePublish}
+                onRefreshPlugins={refreshPlugins}
+              />
+            )}
 
-        {activeTab === 'ui' && (
-          <PluginUi plugins={plugins} />
+            {activeTab === 'ui' && (
+              <div className="ui-tab-placeholder">
+                <div className="empty-state">
+                  <div className="empty-icon">🎨</div>
+                  <h3>请直接访问 <code>/plugin/&lt;插件ID&gt;</code> 查看子应用</h3>
+                  <p>已加载的插件 ID 列表：</p>
+                  <ul className="ui-plugin-list">
+                    {plugins.filter(p => p.has_ui).map(p => (
+                      <li key={p.id}>
+                        <code>{p.id}</code> — {p.agency}
+                      </li>
+                    ))}
+                    {plugins.filter(p => p.has_ui).length === 0 && <li>（暂无 UI 插件）</li>}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 

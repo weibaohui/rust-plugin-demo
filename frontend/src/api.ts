@@ -15,6 +15,12 @@ export interface PluginInfo {
   module_type: string | null;
   ui_tag_name: string | null;
   ui_js_path: string | null;
+  /**
+   * qiankun 子应用入口 URL（由 micro.ts 计算并填充）。
+   * 仅当插件编译为 qiankun 微前端时存在；前端使用此字段作为
+   * `registerMicroApps` 的 entry。
+   */
+  qiankunEntry?: string;
 }
 
 export interface PluginUiInfo {

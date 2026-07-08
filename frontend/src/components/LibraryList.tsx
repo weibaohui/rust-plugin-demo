@@ -4,10 +4,9 @@ interface LibraryListProps {
   libraries: LibraryInfo[];
   onLoad: (name: string) => Promise<PluginInfo[]>;
   onRefresh: () => Promise<LibraryInfo[]>;
-  plugins: PluginInfo[];
 }
 
-export default function LibraryList({ libraries, onLoad, onRefresh, plugins }: LibraryListProps) {
+export default function LibraryList({ libraries, onLoad, onRefresh }: LibraryListProps) {
   const knownPlugins = ['reuters_plugin', 'afp_plugin'];
   const dylibExt = 'dylib'; // macOS 动态库扩展名
 

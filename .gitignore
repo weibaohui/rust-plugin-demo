@@ -19,8 +19,14 @@ Cargo.lock
 frontend/node_modules/
 frontend/dist/
 frontend/package-lock.json
+reuters_plugin/ui/node_modules/
+reuters_plugin/ui/dist/
+reuters_plugin/ui/package-lock.json
+afp_plugin/ui/node_modules/
+afp_plugin/ui/dist/
+afp_plugin/ui/package-lock.json
 
 ## ------------------------------------------------------------------------------------------------
-# Plugin UI compiled output (generated from .tsx by esbuild)
+# Plugin UI legacy compiled output (kept during migration; remove after first clean build)
 reuters_plugin/ui/panel.js
 afp_plugin/ui/panel.js
