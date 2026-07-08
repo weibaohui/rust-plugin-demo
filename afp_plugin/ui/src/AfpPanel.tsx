@@ -1,89 +1,117 @@
 /**
- * 法新社插件 React 面板（qiankun 子应用版本）
+ * 法新社插件 React 面板（Ant Design 版）。
  *
- * 之前由宿主注入 React / createRoot；现在此项目独立打包 React，
- * 由 vite-plugin-qiankun 在 qiankun 容器中挂载。
+ * 演示控件:Card / Form / Select / Input / Button / Table / Tag,
+ * 体现主框架承载 antd 子应用。localStorage 持久化设置。
  */
-
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { Card, Form, Select, Input, Button, Table, Tag, Space, App as AntApp } from 'antd';
+import type { TableColumnsType } from 'antd';
 
 interface AfpPanelProps {
   pluginId?: string;
 }
 
-export function AfpPanel({ pluginId = 'afp_plugin' }: AfpPanelProps) {
-  const [language, setLanguage] = useState('fr');
-  const [status, setStatus] = useState<'saving' | 'success' | 'error' | null>(null);
+interface DemoRow {
+  key: string;
+  lang: string;
+  label: string;
+  region: string;
+}
 
-  const api = {
-    async getSettings(id: string): Promise<Record<string, unknown> | null> {
-      try {
-        const raw = localStorage.getItem(`plugin-settings-${id}`);
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    },
-    async saveSettings(id: string, settings: Record<string, unknown>): Promise<void> {
-      localStorage.setItem(`plugin-settings-${id}`, JSON.stringify(settings));
-    },
-  };
+const LANGUAGES = [
+  { value: 'fr', label: '🇫🇷 Français' },
+  { value: 'en', label: '🇬🇧 English' },
+  { value: 'ar', label: '🇸🇦 العربية' },
+  { value: 'es', label: '🇪🇸 Español' },
+];
+
+const DEMO_DATA: DemoRow[] = [
+  { key: '1', lang: 'fr', label: 'Français', region: 'Paris' },
+  { key: '2', lang: 'en', label: 'English', region: 'London' },
+  { key: '3', lang: 'ar', label: 'العربية', region: 'Cairo' },
+  { key: '4', lang: 'es', label: 'Español', region: 'Madrid' },
+];
+
+function PanelContent({ pluginId = 'afp_plugin' }: AfpPanelProps): ReactNode {
+  const [language, setLanguage] = useState('fr');
+  const [note, setNote] = useState('');
+  const { message } = AntApp.useApp();
 
   useEffect(() => {
-    api.getSettings(pluginId)
-      .then((s) => {
-        if (s && typeof s.language === 'string') setLanguage(s.language);
-      })
-      .catch(() => undefined);
+    const raw = localStorage.getItem(`plugin-settings-${pluginId}`);
+    if (raw) {
+      try {
+        const s = JSON.parse(raw) as { language?: string; note?: string };
+        if (typeof s.language === 'string') setLanguage(s.language);
+        if (typeof s.note === 'string') setNote(s.note);
+      } catch {
+        /* ignore malformed settings */
+      }
+    }
   }, [pluginId]);
 
-  const handleSave = useCallback(async () => {
-    setStatus('saving');
+  const handleSave = useCallback(() => {
     try {
-      await api.saveSettings(pluginId, { language });
-      setStatus('success');
-      setTimeout(() => setStatus(null), 2000);
+      localStorage.setItem(`plugin-settings-${pluginId}`, JSON.stringify({ language, note }));
+      message.success('语言偏好已保存');
     } catch {
-      setStatus('error');
-      setTimeout(() => setStatus(null), 2000);
+      message.error('保存失败,请重试');
     }
-  }, [language, pluginId]);
+  }, [language, note, pluginId, message]);
+
+  const columns: TableColumnsType<DemoRow> = [
+    { title: '语言', dataIndex: 'label', key: 'label' },
+    {
+      title: '代码',
+      dataIndex: 'lang',
+      key: 'lang',
+      render: (v: string) => <Tag color="blue">{v}</Tag>,
+    },
+    { title: '地区', dataIndex: 'region', key: 'region' },
+  ];
 
   return (
-    <div className="plugin-panel">
-      <h3 className="panel-title">📡 法新社控制面板</h3>
-      <p className="panel-desc">配置 AFP 的默认语言偏好</p>
+    <Card title="📡 法新社控制面板" style={{ maxWidth: 720 }}>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Form layout="vertical">
+          <Form.Item label="默认语言">
+            <Select value={language} onChange={setLanguage} options={LANGUAGES} />
+          </Form.Item>
+          <Form.Item label="备注">
+            <Input
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="输入备注信息"
+              allowClear
+            />
+          </Form.Item>
+          <Form.Item label="当前插件 ID">
+            <Input value={pluginId} disabled />
+          </Form.Item>
+          <Button type="primary" onClick={handleSave}>
+            💾 保存设置
+          </Button>
+        </Form>
+        <Card type="inner" title="语言演示数据" size="small">
+          <Table
+            columns={columns}
+            dataSource={DEMO_DATA}
+            pagination={false}
+            size="small"
+            rowKey="key"
+          />
+        </Card>
+      </Space>
+    </Card>
+  );
+}
 
-      <div className="field">
-        <label className="field-label">语言 (Language)</label>
-        <select
-          className="field-input"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
-          <option value="fr">🇫🇷 Français</option>
-          <option value="en">🇬🇧 English</option>
-          <option value="ar">🇸🇦 العربية</option>
-          <option value="es">🇪🇸 Español</option>
-        </select>
-      </div>
-
-      <div className="field">
-        <label className="field-label">当前插件 ID</label>
-        <code className="field-code">{pluginId}</code>
-      </div>
-
-      <button
-        className="btn btn-primary"
-        onClick={handleSave}
-        disabled={status === 'saving'}
-      >
-        {status === 'saving' ? '⏳ 保存中…' : '💾 保存设置'}
-      </button>
-
-      {status === 'success' && <p className="msg success">✅ 语言偏好已保存</p>}
-      {status === 'error' && <p className="msg error">❌ 保存失败，请重试</p>}
-    </div>
+export function AfpPanel(props: AfpPanelProps): ReactNode {
+  return (
+    <AntApp>
+      <PanelContent {...props} />
+    </AntApp>
   );
 }
 
