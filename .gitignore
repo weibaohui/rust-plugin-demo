@@ -30,3 +30,4 @@ afp_plugin/ui/package-lock.json
 # Plugin UI legacy compiled output (kept during migration; remove after first clean build)
 reuters_plugin/ui/panel.js
 afp_plugin/ui/panel.js
+.playwright-cli/

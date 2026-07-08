@@ -1,5 +1,0 @@
-[     106ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:5175/favicon.ico:0
-[    1156ms] [WARNING] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3984
-[    2158ms] [WARNING] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3984
-[    3159ms] [WARNING] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3984
-[    4154ms] [ERROR] single-spa minified message #31: See https://single-spa.js.org/error/?code=31&arg=bootstrap&arg=application&arg=afp_plugin::afp_plugin::AfpAgency&arg=4000 @ http://localhost:5175/node_modules/.vite/deps/qiankun.js?v=1fa958eb:3981
