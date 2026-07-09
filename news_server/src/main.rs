@@ -124,6 +124,18 @@ struct LoadResult {
     plugins: Vec<PluginInfo>,
 }
 
+#[derive(Serialize)]
+struct CronInfo {
+    name: String,
+    interval_secs: u64,
+    running: bool,
+}
+
+#[derive(Deserialize)]
+struct CronRunRequest {
+    name: String,
+}
+
 // ------------------------------------------------------------------------------------------------
 // HostContext 实现：宿主向插件暴露的信息和回调能力
 // ------------------------------------------------------------------------------------------------
@@ -191,6 +203,8 @@ async fn main() {
         .route("/api/plugins/:id/disable", post(disable_plugin_handler))
         .route("/api/plugins/:id/start", post(start_plugin_handler))
         .route("/api/plugins/:id/stop", post(stop_plugin_handler))
+        .route("/api/plugins/:id/cron", get(list_cron_handler))
+        .route("/api/plugins/:id/cron/run", post(run_cron_handler))
         // 批量操作
         .route("/api/plugins", delete(unload_all_handler))
         // 插件前端 UI 静态文件
@@ -629,6 +643,62 @@ async fn stop_plugin_handler(
     info!("已停止插件 '{}'", id);
     Ok(Json(ApiMessage {
         message: format!("插件 '{}' 已停止", id),
+    }))
+}
+
+// ------------------------------------------------------------------------------------------------
+// 插件定时任务(cron)
+// ------------------------------------------------------------------------------------------------
+
+async fn list_cron_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<CronInfo>>, (StatusCode, Json<ApiMessage>)> {
+    let ctx = state.read().unwrap();
+    let running = matches!(ctx.manager.plugin_status(&id), Some(PluginStatus::Running));
+    let plugin = ctx.manager.get(&id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiMessage {
+                message: format!("未找到插件 '{}'", id),
+            }),
+        )
+    })?;
+    let crons: Vec<CronInfo> = plugin
+        .cron_specs()
+        .into_iter()
+        .map(|c| CronInfo {
+            name: c.name,
+            interval_secs: c.interval_secs,
+            running,
+        })
+        .collect();
+    Ok(Json(crons))
+}
+
+async fn run_cron_handler(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+    Json(req): Json<CronRunRequest>,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let plugin = {
+        let ctx = state.read().unwrap();
+        ctx.manager.get(&id)
+    };
+    let plugin = plugin.ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiMessage {
+                message: format!("未找到插件 '{}'", id),
+            }),
+        )
+    })?;
+    plugin
+        .on_cron(&req.name)
+        .map_err(|e| plugin_err_to_response(e, "cron 执行"))?;
+    info!("手动触发插件 '{}' cron '{}'", id, req.name);
+    Ok(Json(ApiMessage {
+        message: format!("cron '{}' 已触发", req.name),
     }))
 }
 

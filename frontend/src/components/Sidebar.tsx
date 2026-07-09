@@ -9,6 +9,7 @@ interface SidebarProps {
 
 /** 宿主固定菜单项（与插件菜单同构，前端硬编码）。 */
 const HOST_MENUS: PluginMenu[] = [
+  { key: 'plugins', title: '已加载插件', icon: '🔌', route: '/', order: 0, children: [] },
   { key: 'libraries', title: '插件库管理', icon: '📦', route: '/libraries', order: 10, children: [] },
   { key: 'publish', title: '发布新闻', icon: '📰', route: '/publish', order: 20, children: [] },
 ];

@@ -1,4 +1,6 @@
-import type { PluginInfo, PluginStatus } from '../api';
+import { useState, useEffect } from 'react';
+import type { PluginInfo, PluginStatus, CronInfo } from '../api';
+import { listCrons, runCron } from '../api';
 
 interface PluginListProps {
   plugins: PluginInfo[];
@@ -16,6 +18,140 @@ const STATUS_META: Record<PluginStatus, { label: string; color: string }> = {
   Enabled: { label: '已启用', color: 'var(--accent)' },
   Running: { label: '运行中', color: 'var(--green)' },
 };
+
+/** 生命周期操作二次确认(对齐 k8m confirmText)。 */
+function confirmAction(msg: string): boolean {
+  return window.confirm(msg);
+}
+
+interface PluginCardProps {
+  plugin: PluginInfo;
+  onUnload: (id: string) => void;
+  onEnable: (id: string) => Promise<void>;
+  onDisable: (id: string) => Promise<void>;
+  onStart: (id: string) => Promise<void>;
+  onStop: (id: string) => Promise<void>;
+  onRefresh: () => Promise<PluginInfo[]>;
+}
+
+function PluginCard({ plugin, onUnload, onEnable, onDisable, onStart, onStop, onRefresh }: PluginCardProps) {
+  const [crons, setCrons] = useState<CronInfo[]>([]);
+  const meta = STATUS_META[plugin.status];
+
+  useEffect(() => {
+    listCrons(plugin.id)
+      .then(setCrons)
+      .catch(() => setCrons([]));
+  }, [plugin.id, plugin.status]);
+
+  const handleRunCron = async (name: string) => {
+    if (!confirmAction(`手动执行 cron "${name}"?`)) return;
+    try {
+      await runCron(plugin.id, name);
+      await onRefresh();
+    } catch (e) {
+      window.alert(`执行失败: ${e}`);
+    }
+  };
+
+  return (
+    <div className="plugin-card">
+      <div className="plugin-card-header">
+        <span className="plugin-agency-icon">
+          {plugin.agency === 'Reuters' ? '📰' : plugin.agency === 'Agence France-Presse' ? '🇫🇷' : '📡'}
+        </span>
+        <span className="plugin-agency-name">{plugin.agency}</span>
+        <span className="status-badge" style={{ background: meta.color, color: 'white' }}>
+          {meta.label}
+        </span>
+      </div>
+      <div className="plugin-card-body">
+        <div className="field">
+          <span className="field-label">插件 ID</span>
+          <code className="field-value plugin-id">{plugin.id}</code>
+        </div>
+      </div>
+      {crons.length > 0 && (
+        <div className="plugin-card-body">
+          <div className="field">
+            <span className="field-label">定时任务</span>
+          </div>
+          {crons.map(c => (
+            <div
+              key={c.name}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0' }}
+            >
+              <span
+                className="status-badge"
+                style={{
+                  background: c.running ? 'var(--green)' : 'var(--bg-hover)',
+                  color: 'white',
+                }}
+              >
+                {c.running ? '运行中' : '已停止'}
+              </span>
+              <code>{c.name}</code>
+              <span style={{ color: 'var(--text-dim)' }}>每 {c.interval_secs}s</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleRunCron(c.name)}>
+                ⚡ 执行一次
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="plugin-card-footer">
+        {plugin.status === 'Loaded' && (
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              if (confirmAction(`启用 ${plugin.agency}?`)) onEnable(plugin.id);
+            }}
+          >
+            启用
+          </button>
+        )}
+        {plugin.status === 'Enabled' && (
+          <>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                if (confirmAction(`启动 ${plugin.agency}(后台任务 + cron)?`)) onStart(plugin.id);
+              }}
+            >
+              启动
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                if (confirmAction(`禁用 ${plugin.agency}?`)) onDisable(plugin.id);
+              }}
+            >
+              禁用
+            </button>
+          </>
+        )}
+        {plugin.status === 'Running' && (
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              if (confirmAction(`停止 ${plugin.agency}?`)) onStop(plugin.id);
+            }}
+          >
+            停止
+          </button>
+        )}
+        <button
+          className="btn btn-danger btn-sm"
+          onClick={() => {
+            if (confirmAction(`卸载 ${plugin.agency}(清理 + 关库)?`)) onUnload(plugin.id);
+          }}
+        >
+          卸载
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function PluginList({
   plugins,
@@ -44,14 +180,12 @@ export default function PluginList({
       </div>
 
       <div className="info-box">
-        <strong>💡 插件全生命周期状态机</strong>
-        <ol>
-          <li><strong>发现</strong> — 在「插件库管理」中扫描可用的 .dylib 文件</li>
-          <li><strong>加载</strong> — on_load + on_install,状态 = Loaded</li>
-          <li><strong>启用</strong> — on_enable,状态 = Enabled,菜单对前端可见</li>
-          <li><strong>启动</strong> — on_start + cron 注册,状态 = Running,后台任务运行</li>
-          <li><strong>停止/禁用/卸载</strong> — on_stop / on_disable / on_unload,资源收敛</li>
-        </ol>
+        <strong>💡 插件生命周期状态机(参考 k8m)</strong>
+        <p>
+          load → <strong>Loaded</strong> → enable → <strong>Enabled</strong>(菜单可见)→ start →{' '}
+          <strong>Running</strong>(cron 运行)→ stop → Enabled → disable → Loaded → unload → 移除
+        </p>
+        <p>菜单可见性:仅 Enabled/Running 时 Sidebar 显示插件菜单项;操作按钮按状态显隐 + 二次确认。</p>
       </div>
 
       {plugins.length === 0 ? (
@@ -62,60 +196,18 @@ export default function PluginList({
         </div>
       ) : (
         <div className="plugin-grid">
-          {plugins.map(plugin => {
-            const meta = STATUS_META[plugin.status];
-            return (
-              <div key={plugin.id} className="plugin-card">
-                <div className="plugin-card-header">
-                  <span className="plugin-agency-icon">
-                    {plugin.agency === 'Reuters'
-                      ? '📰'
-                      : plugin.agency === 'Agence France-Presse'
-                        ? '🇫🇷'
-                        : '📡'}
-                  </span>
-                  <span className="plugin-agency-name">{plugin.agency}</span>
-                  <span
-                    className="status-badge"
-                    style={{ background: meta.color, color: 'white' }}
-                  >
-                    {meta.label}
-                  </span>
-                </div>
-                <div className="plugin-card-body">
-                  <div className="field">
-                    <span className="field-label">插件 ID</span>
-                    <code className="field-value plugin-id">{plugin.id}</code>
-                  </div>
-                </div>
-                <div className="plugin-card-footer">
-                  {plugin.status === 'Loaded' && (
-                    <button className="btn btn-primary btn-sm" onClick={() => onEnable(plugin.id)}>
-                      启用
-                    </button>
-                  )}
-                  {plugin.status === 'Enabled' && (
-                    <>
-                      <button className="btn btn-primary btn-sm" onClick={() => onStart(plugin.id)}>
-                        启动
-                      </button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => onDisable(plugin.id)}>
-                        禁用
-                      </button>
-                    </>
-                  )}
-                  {plugin.status === 'Running' && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => onStop(plugin.id)}>
-                      停止
-                    </button>
-                  )}
-                  <button className="btn btn-danger btn-sm" onClick={() => onUnload(plugin.id)}>
-                    卸载
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {plugins.map(plugin => (
+            <PluginCard
+              key={plugin.id}
+              plugin={plugin}
+              onUnload={onUnload}
+              onEnable={onEnable}
+              onDisable={onDisable}
+              onStart={onStart}
+              onStop={onStop}
+              onRefresh={onRefresh}
+            />
+          ))}
         </div>
       )}
     </div>

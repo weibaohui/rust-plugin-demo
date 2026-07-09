@@ -117,3 +117,24 @@ export async function stopPlugin(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/stop`, { method: 'POST' });
   if (!res.ok) throw new Error('停止失败');
 }
+
+export interface CronInfo {
+  name: string;
+  interval_secs: number;
+  running: boolean;
+}
+
+export async function listCrons(id: string): Promise<CronInfo[]> {
+  const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/cron`);
+  if (!res.ok) throw new Error('获取 cron 失败');
+  return res.json();
+}
+
+export async function runCron(id: string, name: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/cron/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error('执行 cron 失败');
+}
