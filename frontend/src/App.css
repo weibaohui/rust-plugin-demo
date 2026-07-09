@@ -3,21 +3,21 @@
    ============================================================ */
 
 :root {
-  --bg: #0f172a;
-  --bg-card: #1e293b;
-  --bg-nav: #1e293b;
-  --bg-hover: #334155;
-  --text: #e2e8f0;
-  --text-dim: #94a3b8;
-  --text-bright: #f8fafc;
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
+  --bg: #09090b;
+  --bg-card: #18181b;
+  --bg-nav: #0f0f11;
+  --bg-hover: #27272a;
+  --text: #e4e4e7;
+  --text-dim: #a1a1aa;
+  --text-bright: #fafafa;
+  --accent: #5e6ad2;
+  --accent-hover: #4f5bc1;
   --green: #22c55e;
   --green-bg: #052e16;
   --red: #ef4444;
   --red-hover: #dc2626;
   --orange: #f97316;
-  --border: #334155;
+  --border: #27272a;
   --radius: 8px;
   --radius-lg: 12px;
 }
@@ -277,7 +277,7 @@ body {
 /* 信息框 ============================================== */
 
 .info-box {
-  background: #172033;
+  background: var(--bg-card);
   border: 1px solid #1e3a5f;
   border-radius: var(--radius);
   padding: 16px;
@@ -314,7 +314,7 @@ body {
 }
 
 .plugin-card, .library-card {
-  background: #172033;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -367,7 +367,7 @@ body {
 .plugin-id {
   font-size: 11px;
   word-break: break-all;
-  background: #0f172a;
+  background: var(--bg);
   padding: 4px 8px;
   border-radius: 4px;
 }
@@ -416,7 +416,7 @@ body {
 .form-group select,
 .form-group input,
 .form-group textarea {
-  background: #0f172a;
+  background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
   padding: 10px 12px;

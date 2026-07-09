@@ -7,7 +7,7 @@ import PluginList from './components/PluginList';
 import PluginUi from './components/PluginUi';
 import PublishForm from './components/PublishForm';
 import type { PluginInfo, LibraryInfo, ArticleResponse } from './api';
-import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, publishArticle } from './api';
+import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, publishArticle, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 
 /**
@@ -148,6 +148,62 @@ export default function App(): ReactNode {
     }
   };
 
+  const handleEnable = async (id: string) => {
+    try {
+      setError(null);
+      addLog(`正在启用: ${id}...`);
+      await enablePlugin(id);
+      addLog(`✅ 已启用: ${id}`);
+      await refreshPlugins();
+    } catch (e) {
+      const msg = `❌ 启用失败: ${e}`;
+      addLog(msg);
+      setError(msg);
+    }
+  };
+
+  const handleDisable = async (id: string) => {
+    try {
+      setError(null);
+      addLog(`正在禁用: ${id}...`);
+      await disablePlugin(id);
+      addLog(`✅ 已禁用: ${id}`);
+      await refreshPlugins();
+    } catch (e) {
+      const msg = `❌ 禁用失败: ${e}`;
+      addLog(msg);
+      setError(msg);
+    }
+  };
+
+  const handleStart = async (id: string) => {
+    try {
+      setError(null);
+      addLog(`正在启动: ${id}...`);
+      await startPlugin(id);
+      addLog(`✅ 已启动: ${id}(cron 已注册)`);
+      await refreshPlugins();
+    } catch (e) {
+      const msg = `❌ 启动失败: ${e}`;
+      addLog(msg);
+      setError(msg);
+    }
+  };
+
+  const handleStop = async (id: string) => {
+    try {
+      setError(null);
+      addLog(`正在停止: ${id}...`);
+      await stopPlugin(id);
+      addLog(`✅ 已停止: ${id}`);
+      await refreshPlugins();
+    } catch (e) {
+      const msg = `❌ 停止失败: ${e}`;
+      addLog(msg);
+      setError(msg);
+    }
+  };
+
   const routePath = useRoute();
   const pluginRouteMatch = useMemo(() => {
     const m = /^\/plugin\/(.+)$/.exec(routePath);
@@ -180,6 +236,10 @@ export default function App(): ReactNode {
         onUnload={handleUnload}
         onUnloadAll={handleUnloadAll}
         onRefresh={refreshPlugins}
+        onEnable={handleEnable}
+        onDisable={handleDisable}
+        onStart={handleStart}
+        onStop={handleStop}
       />
     );
   }
