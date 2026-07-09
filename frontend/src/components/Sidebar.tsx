@@ -1,4 +1,12 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
+import {
+  Plug,
+  FolderArchive,
+  Newspaper,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import type { PluginMenu, PluginInfo } from '../api';
 
 interface SidebarProps {
@@ -7,12 +15,19 @@ interface SidebarProps {
   onNavigate: (route: string) => void;
 }
 
-/** 宿主固定菜单项（与插件菜单同构，前端硬编码）。 */
+/** 宿主固定菜单项(与插件菜单同构,前端硬编码)。 */
 const HOST_MENUS: PluginMenu[] = [
-  { key: 'plugins', title: '已加载插件', icon: '🔌', route: '/', order: 0, children: [] },
-  { key: 'libraries', title: '插件库管理', icon: '📦', route: '/libraries', order: 10, children: [] },
-  { key: 'publish', title: '发布新闻', icon: '📰', route: '/publish', order: 20, children: [] },
+  { key: 'plugins', title: '已加载插件', icon: null, route: '/', order: 0, children: [] },
+  { key: 'libraries', title: '插件库管理', icon: null, route: '/libraries', order: 10, children: [] },
+  { key: 'publish', title: '发布新闻', icon: null, route: '/publish', order: 20, children: [] },
 ];
+
+/** 宿主菜单 key → lucide 图标(skill:用 SVG,不用 emoji)。 */
+const HOST_ICONS: Record<string, ReactNode> = {
+  plugins: <Plug size={16} />,
+  libraries: <FolderArchive size={16} />,
+  publish: <Newspaper size={16} />,
+};
 
 interface MenuItemProps {
   item: PluginMenu;
@@ -21,12 +36,13 @@ interface MenuItemProps {
   depth: number;
 }
 
-/** 递归渲染一个菜单项：有 children 则为可展开分组，否则为可点击叶子。 */
-function MenuItem({ item, currentPath, onNavigate, depth }: MenuItemProps): JSX.Element {
+/** 递归渲染一个菜单项:有 children 则为可展开分组,否则为可点击叶子。 */
+function MenuItem({ item, currentPath, onNavigate, depth }: MenuItemProps): ReactNode {
   const [expanded, setExpanded] = useState(true);
   const hasChildren = item.children.length > 0;
   const isActive = item.route !== null && currentPath === item.route;
-  const paddingLeft = 12 + depth * 16;
+  const paddingLeft = 10 + depth * 16;
+  const icon = HOST_ICONS[item.key] ?? (item.icon ? <span className="menu-icon-emoji">{item.icon}</span> : null);
 
   return (
     <li className="menu-item">
@@ -37,9 +53,9 @@ function MenuItem({ item, currentPath, onNavigate, depth }: MenuItemProps): JSX.
           onClick={() => setExpanded(v => !v)}
           aria-expanded={expanded}
         >
-          {item.icon && <span className="menu-icon">{item.icon}</span>}
+          {icon}
           <span className="menu-title">{item.title}</span>
-          <span className="menu-caret">{expanded ? '▾' : '▸'}</span>
+          {expanded ? <ChevronDown size={14} className="menu-caret" /> : <ChevronRight size={14} className="menu-caret" />}
         </button>
       ) : (
         <button
@@ -49,7 +65,7 @@ function MenuItem({ item, currentPath, onNavigate, depth }: MenuItemProps): JSX.
             if (item.route) onNavigate(item.route);
           }}
         >
-          {item.icon && <span className="menu-icon">{item.icon}</span>}
+          {icon}
           <span className="menu-title">{item.title}</span>
         </button>
       )}
@@ -71,19 +87,19 @@ function MenuItem({ item, currentPath, onNavigate, depth }: MenuItemProps): JSX.
 }
 
 /**
- * 左侧菜单：宿主固定菜单 + 已加载插件声明的菜单，合并后按 order 排序、树形渲染。
+ * 左侧菜单:宿主固定菜单 + 已加载插件声明的菜单,合并后按 order 排序、树形渲染。
  * 点击叶子菜单项调用 onNavigate(route) 触发 SPA 路由。
  */
-export default function Sidebar({ plugins, currentPath, onNavigate }: SidebarProps): JSX.Element {
+export default function Sidebar({ plugins, currentPath, onNavigate }: SidebarProps): ReactNode {
   const pluginMenus = plugins.flatMap(p => p.menu);
   const menus = [...HOST_MENUS, ...pluginMenus].sort((a, b) => a.order - b.order);
 
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <span className="brand-icon">📡</span>
-        <span className="brand-text">新闻插件管理系统</span>
-        <span className="brand-badge">v0.1</span>
+        <Plug size={20} className="brand-icon" />
+        <span className="brand-text">插件管理后台</span>
+        <span className="brand-badge">v0.2</span>
       </div>
       <nav className="sidebar-nav" aria-label="主导航">
         <ul className="menu-list">
