@@ -43,7 +43,13 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
                     order: 0,
                     children: vec![],
                 }],
-            }),
+            })
+            // 生命周期钩子回调(演示用法:每个钩子自定义行为)
+            .with_on_enable(on_enable)
+            .with_on_start(on_start)
+            .with_on_stop(on_stop)
+            .with_on_disable(on_disable)
+            .with_on_cron(on_cron),
     );
 }
 
@@ -65,6 +71,33 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
 //
 // 插件开发者如需自定义生命周期行为,在 `news_api` 的 `impl Plugin` 中覆盖对应钩子
 // (钩子默认 no-op,只覆盖需要的)。
+
+// ------------------------------------------------------------------------------------------------
+// 生命周期钩子回调实现(演示用法)
+// ------------------------------------------------------------------------------------------------
+// 注意:本 crate 编译为 dylib 动态加载,log crate 的全局 logger 是进程级 static,
+// dylib 内未初始化,因此 log::info! 不会有输出。这里用 eprintln! 直接写 stderr,
+// 宿主(news_server)可在其标准错误看到。生产中可通过 HostContext.log_message 上报日志。
+
+fn on_enable() {
+    eprintln!("[afp] enabled: 初始化资源,菜单可见");
+}
+
+fn on_start() {
+    eprintln!("[afp] started: 后台任务就绪,heartbeat 30s");
+}
+
+fn on_stop() {
+    eprintln!("[afp] stopped: 后台任务停止");
+}
+
+fn on_disable() {
+    eprintln!("[afp] disabled: 菜单隐藏,收敛能力");
+}
+
+fn on_cron() {
+    eprintln!("[afp] heartbeat: 定时检查");
+}
 
 // ------------------------------------------------------------------------------------------------
 // 插件标识符

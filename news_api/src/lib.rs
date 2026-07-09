@@ -95,6 +95,12 @@ pub struct NewsAgencyPlugin {
     ui_dist: Option<&'static Dir<'static>>,
     /// 插件向前端声明的菜单树。
     menus: Vec<PluginMenu>,
+    /// 生命周期钩子回调(可选,插件自定义行为;None 时用默认日志)。
+    on_enable_fn: Option<fn()>,
+    on_start_fn: Option<fn()>,
+    on_stop_fn: Option<fn()>,
+    on_disable_fn: Option<fn()>,
+    on_cron_fn: Option<fn()>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -128,26 +134,41 @@ impl Plugin for NewsAgencyPlugin {
 
     fn on_enable(&self) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' enabled.", self.agency_name);
+        if let Some(f) = self.on_enable_fn {
+            f();
+        }
         Ok(())
     }
 
     fn on_disable(&self) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' disabled.", self.agency_name);
+        if let Some(f) = self.on_disable_fn {
+            f();
+        }
         Ok(())
     }
 
     fn on_start(&self) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' started.", self.agency_name);
+        if let Some(f) = self.on_start_fn {
+            f();
+        }
         Ok(())
     }
 
     fn on_stop(&self) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' stopped.", self.agency_name);
+        if let Some(f) = self.on_stop_fn {
+            f();
+        }
         Ok(())
     }
 
     fn on_cron(&self, name: &str) -> dygpi::error::Result<()> {
         log::info!("[{}] cron tick: {}", self.agency_name, name);
+        if let Some(f) = self.on_cron_fn {
+            f();
+        }
         Ok(())
     }
 
@@ -180,6 +201,11 @@ impl NewsAgencyPlugin {
             ui_base_dir: None,
             ui_dist: None,
             menus: vec![],
+            on_enable_fn: None,
+            on_start_fn: None,
+            on_stop_fn: None,
+            on_disable_fn: None,
+            on_cron_fn: None,
         }
     }
 
@@ -226,6 +252,36 @@ impl NewsAgencyPlugin {
     ///
     pub fn with_menu(mut self, menu: PluginMenu) -> Self {
         self.menus.push(menu);
+        self
+    }
+
+    /// 设置 `on_enable` 钩子回调(启用时调用,自定义初始化行为)。
+    pub fn with_on_enable(mut self, f: fn()) -> Self {
+        self.on_enable_fn = Some(f);
+        self
+    }
+
+    /// 设置 `on_start` 钩子回调(启动后台任务时调用)。
+    pub fn with_on_start(mut self, f: fn()) -> Self {
+        self.on_start_fn = Some(f);
+        self
+    }
+
+    /// 设置 `on_stop` 钩子回调(停止后台任务时调用)。
+    pub fn with_on_stop(mut self, f: fn()) -> Self {
+        self.on_stop_fn = Some(f);
+        self
+    }
+
+    /// 设置 `on_disable` 钩子回调(禁用时调用)。
+    pub fn with_on_disable(mut self, f: fn()) -> Self {
+        self.on_disable_fn = Some(f);
+        self
+    }
+
+    /// 设置 `on_cron` 钩子回调(定时任务执行时调用)。
+    pub fn with_on_cron(mut self, f: fn()) -> Self {
+        self.on_cron_fn = Some(f);
         self
     }
 

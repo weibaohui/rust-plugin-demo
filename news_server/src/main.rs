@@ -163,7 +163,9 @@ impl HostContext for ServerHostContext {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter("news_server=info,dygpi=info,news_api=info")
+        .with_env_filter(
+            "news_server=info,dygpi=info,news_api=info,afp_plugin=info,reuters_plugin=info",
+        )
         .init();
 
     let state: SharedState = Arc::new(RwLock::new(AppContext {
