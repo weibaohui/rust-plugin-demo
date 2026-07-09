@@ -48,6 +48,25 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
 }
 
 // ------------------------------------------------------------------------------------------------
+// 插件生命周期钩子
+// ------------------------------------------------------------------------------------------------
+// 本插件通过 `NewsAgencyPlugin` 实现 `dygpi::plugin::Plugin` trait,钩子在
+// `news_api/src/lib.rs` 的 `impl Plugin` 中实现。宿主(news_server)按状态机调用:
+//
+//   load    → on_load      + on_install   加载库 + 数据初始化(幂等)         → Loaded
+//   enable  → on_enable                   菜单可见、API 可访问              → Enabled
+//   start   → on_start     + cron 注册    后台任务;本插件声明 heartbeat 30s → Running
+//   stop    → on_stop      + cron 注销    停止后台任务                      → Enabled
+//   disable → on_disable                  菜单隐藏、收敛能力                → Loaded
+//   unload  → on_uninstall + on_unload    清理 + 关库(Running/Enabled 自动先 stop/disable)
+//
+// cron:`NewsAgencyPlugin::cron_specs()` 返回 `[{ name: "heartbeat", interval_secs: 30 }]`,
+// `on_cron("heartbeat")` 由宿主在 Running 时周期调用(打日志)。
+//
+// 插件开发者如需自定义生命周期行为,在 `news_api` 的 `impl Plugin` 中覆盖对应钩子
+// (钩子默认 no-op,只覆盖需要的)。
+
+// ------------------------------------------------------------------------------------------------
 // 插件标识符
 // ------------------------------------------------------------------------------------------------
 
