@@ -35,8 +35,8 @@ use std::sync::Arc;
 #     fn plugin_id(&self) -> &String {
 #         todo!()
 #     }
-#     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
 # }
 # impl SoundEffectPlugin {
 #     pub fn play(&self) {}
@@ -106,3 +106,7 @@ pub mod error;
 pub mod plugin;
 
 pub mod manager;
+
+pub mod metadata;
+
+pub mod database;

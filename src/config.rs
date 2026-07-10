@@ -18,8 +18,8 @@ use dygpi::plugin::Plugin;
 #     fn plugin_id(&self) -> &String {
 #         todo!()
 #     }
-#     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
 # }
 # fn load_config_file() -> PluginManagerConfiguration { PluginManagerConfiguration::default() }
 
@@ -210,8 +210,8 @@ impl PluginManagerConfiguration {
     /// #     fn plugin_id(&self) -> &String {
     /// #         &self.id
     /// #     }
-    /// #     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
     /// # }
     /// # impl SoundEffectPlugin {
     /// #     pub fn new(id: &str) -> Self { todo!() }

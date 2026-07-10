@@ -22,13 +22,13 @@ impl Plugin for SoundEffectPlugin {
         &self.id
     }
 
-    fn on_load(&self) -> dygpi::error::Result<()> {
+    fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> {
         // 连接到音频引擎
         // 加载媒体流
         Ok(())
     }
 
-    fn on_unload(&self) -> dygpi::error::Result<()> {
+    fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> {
         // 卸载媒体流
         // 断开音频引擎连接
         Ok(())
@@ -58,8 +58,8 @@ use dygpi::plugin::PluginRegistrar;
 #     fn plugin_id(&self) -> &String {
 #         &self.id
 #     }
-#     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
 # }
 # impl SoundEffectPlugin {
 #     pub fn new(id: &str) -> Self { unimplemented!() }
@@ -78,7 +78,9 @@ pub extern "C" fn register_plugins<MyPlugin>(
 
 */
 
+use crate::database::DatabaseExt;
 use crate::error::Result;
+use crate::metadata::PluginMetadata;
 use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
@@ -110,50 +112,75 @@ pub enum PluginStatus {
 ///
 /// 插件声明的定时任务规格。宿主在 `on_start` 后据此调度,`on_stop` 时注销。
 ///
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "config_serde", derive(serde::Serialize))]
-pub struct CronSpec {
-    /// 任务名(插件内唯一)。
-    pub name: String,
-    /// 执行间隔(秒)。
-    pub interval_secs: u64,
-}
+/// **注意**:此类型已迁移至 [`crate::metadata::CronSpec`],此处为向后兼容的再导出。
+///
+pub use crate::metadata::CronSpec;
 
 ///
-/// 任何插件类型都必须实现此 trait。它不仅提供插件 ID，还提供了实现者可用来管理
+/// 任何插件类型都必须实现此 trait。它不仅提供插件 ID 与元信息,还提供了实现者可用来管理
 /// 插件所拥有资源的生命周期方法。
+///
+/// # 与宿主数据库交互
+///
+/// 宿主集成了 SQLite 并通过 [`DatabaseExt`] 接口传递给插件。钩子方法中的 `db` 参数
+/// 用于表的创建、初始化、卸载清理。**所有数据库操作必须幂等**。
+///
 pub trait Plugin: Any + Debug + Sync + Send {
     ///
     /// 返回此实例的插件标识符。通常一种既唯一又具有调试/跟踪价值的格式是使用
-    /// 包/模块路径，如下所示。
+    /// 包/模块路径,如下所示。
     ///
     /// ```rust
     /// const PLUGIN_ID: &str = concat!(env!("CARGO_PKG_NAME"), "::", module_path!(), "::MyPlugin");
     /// ```
     fn plugin_id(&self) -> &String;
 
+    ///
+    /// 返回此插件的元信息(名称、版本、作者、依赖、菜单等)。
+    ///
+    /// 宿主据此进行发现、显示、依赖检测、启动顺序排序、卸载清理。
+    /// 详见 [`PluginMetadata`](../metadata/struct.PluginMetadata.html)。
+    ///
+    /// **默认实现**返回空元信息——仅填充 `name`/`title`/`version` 为占位符。
+    /// 插件**应当**覆盖此方法以声明真实元信息。
+    ///
+    fn metadata(&self) -> PluginMetadata {
+        PluginMetadata::new(self.plugin_id(), self.plugin_id(), "0.0.0")
+    }
+
     /// 由插件管理器在注册过程完成后调用。默认 no-op。
-    fn on_load(&self) -> Result<()> {
+    ///
+    /// `db` 为宿主传递的数据库操作接口,插件可据此初始化表结构。
+    fn on_load(&self, _db: &dyn DatabaseExt) -> Result<()> {
         Ok(())
     }
 
     /// 由插件管理器在插件被注销后、库关闭前调用。默认 no-op。
-    fn on_unload(&self) -> Result<()> {
+    ///
+    /// `db` 为宿主传递的数据库操作接口,插件可据此清理资源。
+    fn on_unload(&self, _db: &dyn DatabaseExt) -> Result<()> {
         Ok(())
     }
 
     /// 首次安装:数据初始化(幂等)。`load` 时调用。默认 no-op。
-    fn on_install(&self) -> Result<()> {
+    ///
+    /// 插件应在此创建表、插入基础数据。`db` 为宿主传递的数据库操作接口。
+    fn on_install(&self, _db: &dyn DatabaseExt) -> Result<()> {
         Ok(())
     }
 
     /// 卸载清理。`unload` 时调用。默认 no-op。
-    fn on_uninstall(&self) -> Result<()> {
+    ///
+    /// `keep_data` 为 `true` 时保留数据,仅清理注册信息;为 `false` 时删除表与数据。
+    /// `db` 为宿主传递的数据库操作接口,插件可据此 drop 表。
+    fn on_uninstall(&self, _db: &dyn DatabaseExt, _keep_data: bool) -> Result<()> {
         Ok(())
     }
 
     /// 版本迁移:`load` 时若已安装版本与当前不同则调用。默认 no-op(留作扩展)。
-    fn on_upgrade(&self, _from_version: &str) -> Result<()> {
+    ///
+    /// `from_version` 为旧版本号,`db` 为宿主传递的数据库操作接口。
+    fn on_upgrade(&self, _db: &dyn DatabaseExt, _from_version: &str) -> Result<()> {
         Ok(())
     }
 
@@ -183,6 +210,9 @@ pub trait Plugin: Any + Debug + Sync + Send {
     }
 
     /// 声明的定时任务规格;宿主在 `on_start` 后据此调度,`on_stop` 时注销。默认空。
+    ///
+    /// **注意**:元信息 [`PluginMetadata::crons`] 也声明定时任务规格,两者择一即可。
+    /// 优先使用 `metadata().crons()`。
     fn cron_specs(&self) -> Vec<CronSpec> {
         Vec::new()
     }
@@ -208,8 +238,8 @@ pub trait Plugin: Any + Debug + Sync + Send {
 /// #     fn plugin_id(&self) -> &String {
 /// #         &self.id
 /// #     }
-/// #     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-/// #     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+/// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+/// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
 /// # }
 /// # impl SoundEffectPlugin {
 /// #     pub fn new(id: &str) -> Self { unimplemented!() }

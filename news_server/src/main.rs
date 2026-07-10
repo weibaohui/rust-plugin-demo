@@ -5,6 +5,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
+use dygpi::database::{DatabaseExt, SqliteDatabase};
 use dygpi::error::ErrorKind;
 use dygpi::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
 use dygpi::plugin::{Plugin, PluginStatus};
@@ -173,15 +174,32 @@ impl HostContext for ServerHostContext {
 // ------------------------------------------------------------------------------------------------
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(
             "news_server=info,dygpi=info,news_api=info,afp_plugin=info,reuters_plugin=info",
         )
         .init();
 
+    let db: Arc<dyn DatabaseExt> = {
+        let db_path =
+            std::env::var("NEWS_SERVER_DB").unwrap_or_else(|_| "news_server.sqlite".to_string());
+        let db = match SqliteDatabase::open(&db_path) {
+            Ok(db) => db,
+            Err(e) => {
+                eprintln!("无法打开 SQLite 数据库 {:?}: {}", db_path, e);
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("open sqlite {:?}: {}", db_path, e),
+                )) as Box<dyn std::error::Error>);
+            }
+        };
+        info!("已打开 SQLite 数据库: {}", db.describe());
+        Arc::new(db)
+    };
+
     let state: SharedState = Arc::new(RwLock::new(AppContext {
-        manager: PluginManager::default(),
+        manager: PluginManager::default().with_database(db),
         library_plugins: HashMap::new(),
         article_count: AtomicUsize::new(0),
         cron_flags: HashMap::new(),
@@ -221,8 +239,9 @@ async fn main() {
     println!("║  前端地址:  http://localhost:5173                       ║");
     println!("╚══════════════════════════════════════════════════════════╝");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -509,7 +528,7 @@ async fn unload_plugin_handler(
         }
     }
 
-    ctx.manager.unload_plugin(&id).map_err(|e| {
+    ctx.manager.unload_plugin(&id, false).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiMessage {
@@ -537,7 +556,7 @@ async fn unload_all_handler(State(state): State<SharedState>) -> Json<ApiMessage
         }
     }
     ctx.library_plugins.clear();
-    ctx.manager.unload_all().unwrap_or_default();
+    ctx.manager.unload_all(false).unwrap_or_default();
     info!("已卸载所有插件");
     Json(ApiMessage {
         message: "所有插件已卸载".to_string(),

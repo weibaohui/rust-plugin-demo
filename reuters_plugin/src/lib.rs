@@ -44,6 +44,14 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
                     children: vec![],
                 }],
             })
+            // metadata 声明(参考 npm package.json + k8m Meta)
+            .with_metadata_description("路透社新闻机构插件,Reuters 格式化风格")
+            .with_metadata_author("AtomGit <noreply@atomgit.com>")
+            .with_metadata_homepage("https://github.com/weibaohui/rust-plugin-demo")
+            .with_metadata_license("MIT")
+            .with_metadata_tables(&["reuters_items"])
+            .with_metadata_dependencies(&[])
+            .with_metadata_run_after(&[])
             // 生命周期钩子回调(演示用法:每个钩子自定义行为)
             .with_on_enable(on_enable)
             .with_on_start(on_start)

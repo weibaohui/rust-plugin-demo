@@ -7,7 +7,9 @@
 定义了 [`HostContext`] trait，让插件可以反向调用宿主的方法并获取宿主信息。
 */
 
-use dygpi::plugin::{CronSpec, Plugin};
+use dygpi::database::DatabaseExt;
+use dygpi::metadata::PluginMetadata;
+use dygpi::plugin::Plugin;
 use serde::Serialize;
 
 // 让插件可以嵌入自身的 `ui/dist/` 目录树，并在宿主需要时回放。
@@ -101,6 +103,26 @@ pub struct NewsAgencyPlugin {
     on_stop_fn: Option<fn()>,
     on_disable_fn: Option<fn()>,
     on_cron_fn: Option<fn()>,
+
+    // ---- metadata 字段(参考 npm package.json + k8m Meta) ----
+    /// 元信息:插件唯一标识(系统级)。建议与 `id` 的最后一段一致。
+    metadata_name: String,
+    /// 元信息:版本号(语义化)。
+    metadata_version: String,
+    /// 元信息:功能描述(可选)。
+    metadata_description: Option<String>,
+    /// 元信息:作者(可选)。
+    metadata_author: Option<String>,
+    /// 元信息:主页 URL(可选)。
+    metadata_homepage: Option<String>,
+    /// 元信息:许可证(可选)。
+    metadata_license: Option<String>,
+    /// 元信息:使用的数据库表名列表(卸载时据此清理)。
+    metadata_tables: Vec<String>,
+    /// 元信息:强依赖插件名列表(启用前必须确保都已启用)。
+    metadata_dependencies: Vec<String>,
+    /// 元信息:启动顺序约束(非依赖,但必须在它们之后启动)。
+    metadata_run_after: Vec<String>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -112,23 +134,70 @@ impl Plugin for NewsAgencyPlugin {
         &self.id
     }
 
-    fn on_load(&self) -> dygpi::error::Result<()> {
+    fn metadata(&self) -> PluginMetadata {
+        let mut meta = PluginMetadata::new(
+            &self.metadata_name,
+            &self.agency_name,
+            &self.metadata_version,
+        )
+        .with_icon("📰");
+        if let Some(desc) = &self.metadata_description {
+            meta = meta.with_description(desc);
+        }
+        if let Some(author) = &self.metadata_author {
+            meta = meta.with_author(author);
+        }
+        if let Some(homepage) = &self.metadata_homepage {
+            meta = meta.with_homepage(homepage);
+        }
+        if let Some(license) = &self.metadata_license {
+            meta = meta.with_license(license);
+        }
+        // 菜单树:news_api::PluginMenu 转为 dygpi::metadata::PluginMenu
+        if !self.menus.is_empty() {
+            meta = meta.with_menus(self.menus.iter().map(convert_menu).collect());
+        }
+        meta = meta.with_tables_owned(self.metadata_tables.clone());
+        meta = meta.with_dependencies_owned(self.metadata_dependencies.clone());
+        meta = meta.with_run_after_owned(self.metadata_run_after.clone());
+        meta
+    }
+
+    fn on_load(&self, _db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' loaded.", self.agency_name);
         Ok(())
     }
 
-    fn on_unload(&self) -> dygpi::error::Result<()> {
+    fn on_unload(&self, _db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' unloaded.", self.agency_name);
         Ok(())
     }
 
-    fn on_install(&self) -> dygpi::error::Result<()> {
+    fn on_install(&self, db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
         log::info!("News agency '{}' installed.", self.agency_name);
+        // 演示:按 metadata.tables() 声明逐个建表(幂等)
+        for table in &self.metadata_tables {
+            db.validate_table_name(table)?;
+            let sql = format!(
+                "CREATE TABLE IF NOT EXISTS {} (id INTEGER PRIMARY KEY, headline TEXT, body TEXT)",
+                table
+            );
+            db.execute(&sql)?;
+        }
         Ok(())
     }
 
-    fn on_uninstall(&self) -> dygpi::error::Result<()> {
-        log::info!("News agency '{}' uninstalled.", self.agency_name);
+    fn on_uninstall(&self, db: &dyn DatabaseExt, keep_data: bool) -> dygpi::error::Result<()> {
+        log::info!(
+            "News agency '{}' uninstalled (keep_data={}).",
+            self.agency_name,
+            keep_data
+        );
+        if !keep_data {
+            for table in &self.metadata_tables {
+                db.drop_table(table)?;
+            }
+        }
         Ok(())
     }
 
@@ -172,8 +241,8 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn cron_specs(&self) -> Vec<CronSpec> {
-        vec![CronSpec {
+    fn cron_specs(&self) -> Vec<dygpi::metadata::CronSpec> {
+        vec![dygpi::metadata::CronSpec {
             name: "heartbeat".to_string(),
             interval_secs: 30,
         }]
@@ -206,6 +275,15 @@ impl NewsAgencyPlugin {
             on_stop_fn: None,
             on_disable_fn: None,
             on_cron_fn: None,
+            metadata_name: id.to_string(),
+            metadata_version: env!("CARGO_PKG_VERSION").to_string(),
+            metadata_description: None,
+            metadata_author: None,
+            metadata_homepage: None,
+            metadata_license: None,
+            metadata_tables: vec![],
+            metadata_dependencies: vec![],
+            metadata_run_after: vec![],
         }
     }
 
@@ -282,6 +360,62 @@ impl NewsAgencyPlugin {
     /// 设置 `on_cron` 钩子回调(定时任务执行时调用)。
     pub fn with_on_cron(mut self, f: fn()) -> Self {
         self.on_cron_fn = Some(f);
+        self
+    }
+
+    // ---- metadata builders(参考 npm package.json + k8m Meta) ----
+
+    /// 设置元信息:插件唯一标识(系统级)。默认与 `id` 一致。
+    pub fn with_metadata_name(mut self, name: &str) -> Self {
+        self.metadata_name = name.to_string();
+        self
+    }
+
+    /// 设置元信息:版本号(语义化)。默认取 `CARGO_PKG_VERSION`。
+    pub fn with_metadata_version(mut self, version: &str) -> Self {
+        self.metadata_version = version.to_string();
+        self
+    }
+
+    /// 设置元信息:功能描述。
+    pub fn with_metadata_description(mut self, desc: &str) -> Self {
+        self.metadata_description = Some(desc.to_string());
+        self
+    }
+
+    /// 设置元信息:作者。
+    pub fn with_metadata_author(mut self, author: &str) -> Self {
+        self.metadata_author = Some(author.to_string());
+        self
+    }
+
+    /// 设置元信息:主页 URL。
+    pub fn with_metadata_homepage(mut self, url: &str) -> Self {
+        self.metadata_homepage = Some(url.to_string());
+        self
+    }
+
+    /// 设置元信息:许可证。
+    pub fn with_metadata_license(mut self, license: &str) -> Self {
+        self.metadata_license = Some(license.to_string());
+        self
+    }
+
+    /// 设置元信息:使用的数据库表名列表(卸载时据此清理)。
+    pub fn with_metadata_tables(mut self, tables: &[&str]) -> Self {
+        self.metadata_tables = tables.iter().map(|s| s.to_string()).collect();
+        self
+    }
+
+    /// 设置元信息:强依赖插件名列表(启用前必须确保都已启用)。
+    pub fn with_metadata_dependencies(mut self, deps: &[&str]) -> Self {
+        self.metadata_dependencies = deps.iter().map(|s| s.to_string()).collect();
+        self
+    }
+
+    /// 设置元信息:启动顺序约束(非依赖,但必须在它们之后启动)。
+    pub fn with_metadata_run_after(mut self, deps: &[&str]) -> Self {
+        self.metadata_run_after = deps.iter().map(|s| s.to_string()).collect();
         self
     }
 
@@ -405,5 +539,20 @@ pub fn tass_format(ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArt
         ),
         dateline: "MOSCOW".to_string(),
         agency: String::new(),
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// 私有辅助:news_api::PluginMenu → dygpi::metadata::PluginMenu
+// ------------------------------------------------------------------------------------------------
+
+fn convert_menu(m: &PluginMenu) -> dygpi::metadata::PluginMenu {
+    dygpi::metadata::PluginMenu {
+        key: m.key.clone(),
+        title: m.title.clone(),
+        icon: m.icon.clone(),
+        route: m.route.clone(),
+        order: m.order,
+        children: m.children.iter().map(convert_menu).collect(),
     }
 }
