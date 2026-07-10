@@ -5,7 +5,6 @@ import {
   FolderArchive,
   ChevronDown,
   ChevronRight,
-  Puzzle,
   Blocks,
 } from 'lucide-react';
 import type { PluginMenu, PluginInfo } from '../api';

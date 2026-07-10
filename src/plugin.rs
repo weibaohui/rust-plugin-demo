@@ -45,6 +45,7 @@ impl SoundEffectPlugin {
 
 ```rust
 use plugkit::plugin::PluginRegistrar;
+use std::sync::Arc;
 # use plugkit::plugin::Plugin;
 # #[derive(Debug)] struct SoundEngine;
 # #[derive(Debug)] struct MediaStream;
@@ -69,10 +70,10 @@ use plugkit::plugin::PluginRegistrar;
 const PLUGIN_ID: &str = concat!(env!("CARGO_PKG_NAME"), "::", module_path!(), "::DelayEffect");
 
 #[no_mangle]
-pub extern "C" fn register_plugins<MyPlugin>(
-    registrar: &mut PluginRegistrar<SoundEffectPlugin>
+pub extern "C" fn register_plugins(
+    registrar: &mut PluginRegistrar,
 ) {
-    registrar.register(SoundEffectPlugin::new(PLUGIN_ID));
+    registrar.register(Arc::new(SoundEffectPlugin::new(PLUGIN_ID)));
 }
 ```
 
@@ -81,7 +82,6 @@ pub extern "C" fn register_plugins<MyPlugin>(
 use crate::database::DatabaseExt;
 use crate::error::Result;
 use crate::metadata::PluginMetadata;
-use std::any::Any;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
@@ -125,7 +125,7 @@ pub use crate::metadata::CronSpec;
 /// 宿主集成了 SQLite 并通过 [`DatabaseExt`] 接口传递给插件。钩子方法中的 `db` 参数
 /// 用于表的创建、初始化、卸载清理。**所有数据库操作必须幂等**。
 ///
-pub trait Plugin: Any + Debug + Sync + Send {
+pub trait Plugin: Debug + Sync + Send {
     ///
     /// 返回此实例的插件标识符。通常一种既唯一又具有调试/跟踪价值的格式是使用
     /// 包/模块路径,如下所示。
@@ -230,40 +230,13 @@ pub trait Plugin: Any + Debug + Sync + Send {
 }
 
 ///
-/// 插件提供者**必须**在其库中包含的注册函数类型。
-/// 该函数构造插件实例，并使用注册器作为回调将插件注册到插件管理器。
+/// 插件提供者**必须**在其库中包含的注册函数类型。该函数构造插件实例，
+/// 并使用注册器作为回调将插件注册到插件管理器。
 ///
-/// ```rust
-/// use plugkit::plugin::PluginRegistrar;
-/// # use plugkit::plugin::Plugin;
+/// **注意**：`PluginRegistrar` 为非泛型，宿主和 dylib 看到的 笠名完全一致，
+/// 避免单态化 ABI 不匹配。插件在 `register` 时通过 `Arc::new(MyPlugin)` 上转为 `Arc<dyn Plugin>`。
 ///
-/// # #[derive(Debug)] struct SoundEngine;
-/// # #[derive(Debug)] struct MediaStream;
-/// # #[derive(Debug)]
-/// # struct SoundEffectPlugin {
-/// #     id: String,
-/// #     engine: SoundEngine,
-/// #     media: MediaStream,
-/// # };
-/// # impl Plugin for SoundEffectPlugin {
-/// #     fn plugin_id(&self) -> &String {
-/// #         &self.id
-/// #     }
-/// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
-/// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
-/// # }
-/// # impl SoundEffectPlugin {
-/// #     pub fn new(id: &str) -> Self { unimplemented!() }
-/// #     pub fn play(&self) {}
-/// # }
-/// # const PLUGIN_ID: &str = concat!(env!("CARGO_PKG_NAME"), "::", module_path!(), "::DelayEffect");
-/// #[no_mangle]
-/// pub extern "C" fn register_plugins<MyPlugin>(registrar: &mut PluginRegistrar<SoundEffectPlugin>) {
-///     registrar.register(SoundEffectPlugin::new(PLUGIN_ID));
-/// }
-/// ```
-///
-pub type PluginRegistrationFn<T> = fn(registrar: &mut PluginRegistrar<T>);
+pub type PluginRegistrationFn = fn(registrar: &mut PluginRegistrar);
 
 ///
 /// 注册函数的必需名称（参见 [`PluginRegistrationFn`](type.PluginRegistrationFn.html) 类型）。
@@ -273,12 +246,14 @@ pub const PLUGIN_REGISTRATION_FN_NAME: &[u8] = b"register_plugins\0";
 ///
 /// 注册器由插件管理器创建，并提供给库的注册函数，用于注册其拥有的插件。
 ///
+/// 注册器由插件管理器创建，并提供给库的注册函数，用于注册其拥有的插件。
+///
+/// **注意**：本类型为**非泛型**，内部统一存储 `Arc<dyn Plugin>`，
+/// 以保证宿主与 dylib 看到的内存布局完全一致（避免单态化导致的 ABI 不匹配）。
+/// 插件调用 `registrar.register(Arc::new(MyPlugin))` 时，`Arc<MyPlugin>` 会自动上转为 `Arc<dyn Plugin>`。
 #[derive(Debug)]
-pub struct PluginRegistrar<T>
-where
-    T: Plugin,
-{
-    plugins: Vec<Arc<T>>,
+pub struct PluginRegistrar {
+    plugins: Vec<Arc<dyn Plugin>>,
     error: Option<Box<dyn std::error::Error>>,
 }
 
@@ -314,10 +289,7 @@ pub extern "C" fn compatibility_hash() -> u64 {
 // 实现
 // ------------------------------------------------------------------------------------------------
 
-impl<T> PluginRegistrar<T>
-where
-    T: Plugin,
-{
+impl PluginRegistrar {
     pub(crate) fn default() -> Self {
         Self {
             plugins: Default::default(),
@@ -329,9 +301,11 @@ where
     /// 注册一个插件，将其存储在注册器中，直到注册完成。
     /// 注册函数执行完毕后，如果没有报告错误，插件管理器将添加所有插件。
     ///
-    pub fn register(&mut self, plugin: T) {
+    /// `plugin` 为 `Arc<T>`（具体插件类型），会在内部自动上转为 `Arc<dyn Plugin>`。
+    ///
+    pub fn register(&mut self, plugin: Arc<dyn Plugin>) {
         if self.error.is_none() {
-            self.plugins.push(Arc::new(plugin));
+            self.plugins.push(plugin);
         }
     }
 
@@ -342,7 +316,9 @@ where
         self.error = Some(error);
     }
 
-    pub(crate) fn plugins(self) -> std::result::Result<Vec<Arc<T>>, Box<dyn std::error::Error>> {
+    pub(crate) fn plugins(
+        self,
+    ) -> std::result::Result<Vec<Arc<dyn Plugin>>, Box<dyn std::error::Error>> {
         match self.error {
             None => Ok(self.plugins),
             Some(error) => Err(error),

@@ -76,7 +76,7 @@ export default function App(): ReactNode {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const origin = window.location.origin;
-    const enriched = plugins.map(p => ({ ...p, qiankunEntry: qiankunEntryFor(p, origin) }));
+    const enriched = plugins.map(p => ({ ...p, qiankunEntry: qiankunEntryFor(p, origin) ?? undefined }));
     registerLoadedPlugins(enriched, origin).catch(err => {
       console.error('qiankun registerLoadedPlugins failed', err);
     });

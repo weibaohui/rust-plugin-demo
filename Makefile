@@ -42,12 +42,25 @@ frontend: ## 构建通用前端 (frontend/dist/)
 	@echo "✓ built frontend/dist/ (touch src/host.rs 以触发重编)"
 
 # ---------- 示例 ----------
-run: frontend ## 构建/运行新闻插件示例 (框架 + 示例全量)
+run: frontend ## 启动通用插件管理后台（纯框架，无业务）— http://localhost:3000
+	@echo "==> 构建通用插件宿主..."
+	@cd examples/standalone && cargo build
+	@echo ""
+	@echo "╔══════════════════════════════════════════════════════════╗"
+	@echo "║  plugkit 通用插件管理后台启动中...                       ║"
+	@echo "║  后端 API:  http://localhost:3000/api                   ║"
+	@echo "║  前端 UI:   http://localhost:3000/                      ║"
+	@echo "╚══════════════════════════════════════════════════════════╝"
+	@echo ""
+	@cd examples/standalone && cargo run
+
+# ---------- 新闻示例 ----------
+run-news: frontend ## 构建并运行新闻插件示例 — http://localhost:3000
 	@echo "==> 构建新闻插件示例"
 	$(MAKE) -C examples/news build
 	@echo ""
 	@echo "╔══════════════════════════════════════════════════════════╗"
-	@echo "║  news_server 启动中...                                   ║"
+	@echo "║  news_server 新闻示例启动中...                           ║"
 	@echo "║  后端 API:  http://localhost:3000/api                   ║"
 	@echo "║  前端 UI:  http://localhost:3000/                       ║"
 	@echo "╚══════════════════════════════════════════════════════════╝"
@@ -60,10 +73,10 @@ list: ## 列出项目结构
 	@echo "  src/                — 框架核心 (lib)"
 	@echo "  frontend/           — 通用插件管理前端"
 	@echo ""
-	@echo "示例 (examples/news/):"
-	@echo "  news_server/        — 新闻宿主 (lib + bin)"
-	@echo "  plugins/            — 新闻插件 dylib"
-	@echo "  frontend/           — 新闻宿主前端"
+	@echo "示例:"
+	@echo "  examples/standalone/ — 通用宿主演示（无业务）"
+	@echo "  examples/news/       — 新闻插件宿主演示"
 	@echo ""
-	@echo "构建框架: make"
-	@echo "运行示例: make run"
+	@echo "构建框架:     make"
+	@echo "运行通用宿主:  make run"
+	@echo "运行新闻示例:  make run-news"

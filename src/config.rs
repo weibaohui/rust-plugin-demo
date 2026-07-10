@@ -25,7 +25,7 @@ use plugkit::plugin::Plugin;
 
 let config = load_config_file();
 
-let plugin_manager: PluginManager<SoundEffectPlugin> =
+let plugin_manager: PluginManager =
     if config.contains_plugin_type(EFFECT_PLUGIN_ID) {
         config.make_manager_for_type(EFFECT_PLUGIN_ID).unwrap()
     } else {
@@ -221,16 +221,13 @@ impl PluginManagerConfiguration {
     ///
     /// let config_as_string = read_config_file();
     /// let config: PluginManagerConfiguration = toml::from_str(&config_as_string).unwrap();
-    /// let manager: PluginManager<SoundEffectPlugin> =
+    /// let manager: PluginManager =
     ///     config.make_manager_for_type("sound_effects")
     ///         .unwrap();
     /// ```
-    pub fn make_manager_for_type<T>(&self, plugin_type: &str) -> Result<PluginManager<T>>
-    where
-        T: Plugin,
-    {
+    pub fn make_manager_for_type(&self, plugin_type: &str) -> Result<PluginManager> {
         if let Some(library_list) = self.plugins.get(plugin_type) {
-            let mut manager: PluginManager<T> = PluginManager::default();
+            let mut manager: PluginManager = PluginManager::default();
             manager.load_plugins_from_all(
                 &library_list
                     .iter()

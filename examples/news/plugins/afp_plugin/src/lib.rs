@@ -1,35 +1,95 @@
 /*!
-法新社（AFP）新闻机构插件。
+法新社（AFP）新闻机构插件 — 完全独立，仅依赖 `plugkit` 框架。
 
-通过 [`afp_format`] 注册一个配置了法新社格式化风格的 [`NewsAgencyPlugin`] 实例。
+不依赖任何其他插件或宿主 crate。自己的类型自己定义。
 编译期将 `ui/dist/` 嵌入到本插件的 `.so`/`.dylib` 中，使宿主可直接从内存服务前端。
 */
 
-use plugkit::plugin::PluginRegistrar;
+use plugkit::database::DatabaseExt;
+use plugkit::host::HostContext;
+use plugkit::metadata::{CronSpec, PluginMenu, PluginMetadata};
+use plugkit::plugin::{Plugin, PluginRegistrar};
 use include_dir::{include_dir, Dir};
-use news_server::{afp_format, NewsAgencyPlugin, PluginMenu};
+use serde::Serialize;
+use std::sync::Arc;
 
 // ------------------------------------------------------------------------------------------------
 // 编译期嵌入的 `ui/dist/` 目录
 // ------------------------------------------------------------------------------------------------
 
-/// 由 `include_dir!` 宏在编译期把整个 `afp_plugin/ui/dist/` 目录打包进本 .so。
-/// 路径在二进制内部是只读的，但可以通过 `Dir` 的 API 按需遍历。
 pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 
 // ------------------------------------------------------------------------------------------------
-// 注册
+// AFP 自己的类型（不与他人共享）
 // ------------------------------------------------------------------------------------------------
 
-#[no_mangle]
-pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
-    registrar.register(
-        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
-            // 将嵌入的 ui/dist 绑定到本插件实例，基目录 "afp_plugin/ui"，
-            // 宿主 news_server 据此从内存服务 qiankun 子应用。
-            .with_ui_dist("afp_plugin/ui", &UI_DIST)
-            // 声明左侧菜单：法新社分组 → 控制面板（点击进入 qiankun 子应用）。
-            .with_menu(PluginMenu {
+/// 由 AFP 插件 publish 产生的新闻文章。
+#[derive(Debug, Clone, Serialize)]
+struct NewsArticle {
+    headline: String,
+    body: String,
+    dateline: String,
+    agency: String,
+}
+
+/// AFP 新闻机构插件实例。
+#[derive(Debug)]
+pub struct AfpPlugin {
+    id: String,
+    ui_base_dir: Option<String>,
+    ui_dist: Option<&'static Dir<'static>>,
+}
+
+impl AfpPlugin {
+    const AGENCY: &'static str = "Agence France-Presse";
+
+    fn new(id: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            ui_base_dir: None,
+            ui_dist: None,
+        }
+    }
+
+    fn with_ui_dist(mut self, base_dir: &str, dist: &'static Dir<'static>) -> Self {
+        self.ui_base_dir = Some(base_dir.to_string());
+        self.ui_dist = Some(dist);
+        self
+    }
+
+    /// 发布一篇 AFP 风格新闻。
+    fn publish(&self, ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArticle {
+        ctx.log_message(&format!("AFP formatting news: {}", headline));
+        NewsArticle {
+            headline: format!("{} — AFP", headline),
+            body: format!(
+                "{} [AFP correspondents worldwide]\n\n---\n[Host: {} v{} | {} | {} plugins loaded]",
+                body,
+                ctx.server_name(),
+                ctx.server_version(),
+                ctx.server_time(),
+                ctx.plugin_count(),
+            ),
+            dateline: "PARIS".to_string(),
+            agency: Self::AGENCY.to_string(),
+        }
+    }
+}
+
+impl Plugin for AfpPlugin {
+    fn plugin_id(&self) -> &String {
+        &self.id
+    }
+
+    fn metadata(&self) -> PluginMetadata {
+        PluginMetadata::new(&self.id, Self::AGENCY, env!("CARGO_PKG_VERSION"))
+            .with_icon("📰")
+            .with_description("法新社新闻机构插件,AFP 格式化风格")
+            .with_author("AtomGit <noreply@atomgit.com>")
+            .with_homepage("https://github.com/weibaohui/rust-plugin-demo")
+            .with_license("MIT")
+            .with_tables_owned(vec!["afp_items".to_string()])
+            .with_menus(vec![PluginMenu {
                 key: "afp".into(),
                 title: "法新社".into(),
                 icon: Some("📡".into()),
@@ -43,68 +103,68 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
                     order: 0,
                     children: vec![],
                 }],
-            })
-            // metadata 声明(参考 npm package.json + k8m Meta)
-            .with_metadata_description("法新社新闻机构插件,AFP 格式化风格")
-            .with_metadata_author("AtomGit <noreply@atomgit.com>")
-            .with_metadata_homepage("https://github.com/weibaohui/rust-plugin-demo")
-            .with_metadata_license("MIT")
-            .with_metadata_tables(&["afp_items"])
-            .with_metadata_dependencies(&[])
-            .with_metadata_run_after(&[])
-            // 生命周期钩子回调(演示用法:每个钩子自定义行为)
-            .with_on_enable(on_enable)
-            .with_on_start(on_start)
-            .with_on_stop(on_stop)
-            .with_on_disable(on_disable)
-            .with_on_cron(on_cron),
-    );
+            }])
+    }
+
+    fn on_load(&self, _db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
+        eprintln!("[afp] loaded");
+        Ok(())
+    }
+    fn on_unload(&self, _db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
+        eprintln!("[afp] unloaded");
+        Ok(())
+    }
+    fn on_install(&self, db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
+        db.validate_table_name("afp_items")?;
+        db.execute("CREATE TABLE IF NOT EXISTS afp_items (id INTEGER PRIMARY KEY, headline TEXT, body TEXT)")?;
+        Ok(())
+    }
+    fn on_uninstall(&self, db: &dyn DatabaseExt, keep_data: bool) -> plugkit::error::Result<()> {
+        if !keep_data {
+            db.drop_table("afp_items")?;
+        }
+        Ok(())
+    }
+    fn on_enable(&self) -> plugkit::error::Result<()> {
+        eprintln!("[afp] enabled: 初始化资源,菜单可见");
+        Ok(())
+    }
+    fn on_disable(&self) -> plugkit::error::Result<()> {
+        eprintln!("[afp] disabled: 菜单隐藏,收敛能力");
+        Ok(())
+    }
+    fn on_start(&self) -> plugkit::error::Result<()> {
+        eprintln!("[afp] started: 后台任务就绪,heartbeat 30s");
+        Ok(())
+    }
+    fn on_stop(&self) -> plugkit::error::Result<()> {
+        eprintln!("[afp] stopped: 后台任务停止");
+        Ok(())
+    }
+    fn on_cron(&self, name: &str) -> plugkit::error::Result<()> {
+        eprintln!("[afp] cron tick: {}", name);
+        Ok(())
+    }
+    fn cron_specs(&self) -> Vec<CronSpec> {
+        vec![CronSpec { name: "heartbeat".to_string(), interval_secs: 30 }]
+    }
+    fn ui_base_dir(&self) -> Option<&str> {
+        self.ui_base_dir.as_deref()
+    }
+    fn has_ui(&self) -> bool {
+        self.ui_dist.is_some()
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
-// 插件生命周期钩子
+// 注册入口（dylib 符号）
 // ------------------------------------------------------------------------------------------------
-// 本插件通过 `NewsAgencyPlugin` 实现 `plugkit::plugin::Plugin` trait,钩子在
-// `news_api/src/lib.rs` 的 `impl Plugin` 中实现。宿主(news_server)按状态机调用:
-//
-//   load    → on_load      + on_install   加载库 + 数据初始化(幂等)         → Loaded
-//   enable  → on_enable                   菜单可见、API 可访问              → Enabled
-//   start   → on_start     + cron 注册    后台任务;本插件声明 heartbeat 30s → Running
-//   stop    → on_stop      + cron 注销    停止后台任务                      → Enabled
-//   disable → on_disable                  菜单隐藏、收敛能力                → Loaded
-//   unload  → on_uninstall + on_unload    清理 + 关库(Running/Enabled 自动先 stop/disable)
-//
-// cron:`NewsAgencyPlugin::cron_specs()` 返回 `[{ name: "heartbeat", interval_secs: 30 }]`,
-// `on_cron("heartbeat")` 由宿主在 Running 时周期调用(打日志)。
-//
-// 插件开发者如需自定义生命周期行为,在 `news_api` 的 `impl Plugin` 中覆盖对应钩子
-// (钩子默认 no-op,只覆盖需要的)。
 
-// ------------------------------------------------------------------------------------------------
-// 生命周期钩子回调实现(演示用法)
-// ------------------------------------------------------------------------------------------------
-// 注意:本 crate 编译为 dylib 动态加载,log crate 的全局 logger 是进程级 static,
-// dylib 内未初始化,因此 log::info! 不会有输出。这里用 eprintln! 直接写 stderr,
-// 宿主(news_server)可在其标准错误看到。生产中可通过 HostContext.log_message 上报日志。
-
-fn on_enable() {
-    eprintln!("[afp] enabled: 初始化资源,菜单可见");
-}
-
-fn on_start() {
-    eprintln!("[afp] started: 后台任务就绪,heartbeat 30s");
-}
-
-fn on_stop() {
-    eprintln!("[afp] stopped: 后台任务停止");
-}
-
-fn on_disable() {
-    eprintln!("[afp] disabled: 菜单隐藏,收敛能力");
-}
-
-fn on_cron() {
-    eprintln!("[afp] heartbeat: 定时检查");
+#[no_mangle]
+pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar) {
+    registrar.register(Arc::new(
+        AfpPlugin::new(PLUGIN_ID).with_ui_dist("afp_plugin/ui", &UI_DIST),
+    ));
 }
 
 // ------------------------------------------------------------------------------------------------

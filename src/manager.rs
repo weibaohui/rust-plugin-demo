@@ -28,19 +28,17 @@ use std::sync::Arc;
 # impl SoundEffectPlugin {
 #     pub fn play(&self) {}
 # }
-let mut plugin_manager: PluginManager<SoundEffectPlugin> = PluginManager::default();
+let mut plugin_manager: PluginManager = PluginManager::default();
 
 plugin_manager
     .load_plugins_from("libsound_one.dylib".as_ref())
     .unwrap();
 
-let plugin: Arc<SoundEffectPlugin> = plugin_manager
+let plugin: Arc<dyn plugkit::plugin::Plugin> = plugin_manager
     .get("sound_one::sound_one::DelayEffect")
     .unwrap();
 
 println!("{}", plugin.plugin_id());
-
-plugin.play();
 ```
 
 */
@@ -74,13 +72,10 @@ use std::sync::{Arc, RwLock};
 /// 插件据此进行表的创建、初始化、卸载清理。
 ///
 #[derive(Debug)]
-pub struct PluginManager<T>
-where
-    T: Plugin,
-{
+pub struct PluginManager {
     search_path: SearchPath,
     registration_fn_name: Vec<u8>,
-    plugins: RwLock<HashMap<String, LoadedPlugin<T>>>,
+    plugins: RwLock<HashMap<String, LoadedPlugin>>,
     /// 宿主注入的数据库操作接口,生命周期钩子调用时传递给插件。
     /// `None` 时钩子收到一个 no-op 的占位实现(便于无 DB 的简单用例)。
     database: Option<Arc<dyn DatabaseExt>>,
@@ -111,11 +106,8 @@ pub const PLATFORM_DYLIB_PREFIX: &str = "lib";
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
-struct LoadedPlugin<T>
-where
-    T: Plugin,
-{
-    plugin: Arc<T>,
+struct LoadedPlugin {
+    plugin: Arc<dyn Plugin>,
     in_library: Arc<LoadedLibrary>,
     status: PluginStatus,
 }
@@ -222,10 +214,7 @@ const UTF8_STRING_PANIC: &str = "将 UTF8 符号名转换为字符串时出错";
 
 // ------------------------------------------------------------------------------------------------
 
-impl<T> Default for PluginManager<T>
-where
-    T: Plugin,
-{
+impl Default for PluginManager {
     fn default() -> Self {
         Self {
             search_path: Default::default(),
@@ -236,20 +225,14 @@ where
     }
 }
 
-impl<T> Drop for PluginManager<T>
-where
-    T: Plugin,
-{
+impl Drop for PluginManager {
     fn drop(&mut self) {
         info!("PluginManager::drop()");
         self.unload_all(true).unwrap();
     }
 }
 
-impl<T> PluginManager<T>
-where
-    T: Plugin,
-{
+impl PluginManager {
     ///
     /// 构造一个新的插件管理器，并使用字符串切片的值作为加载库时的搜索路径。
     ///
@@ -368,41 +351,20 @@ where
     ///
     /// ```rust
     /// use plugkit::plugin::{Plugin, PluginRegistrar};
+    /// use std::sync::Arc;
     /// # #[derive(Debug)]
-    /// # struct SoundSourcePlugin;
+    /// # struct SoundSourcePlugin { id: String }
     /// # impl Plugin for SoundSourcePlugin {
-    /// #     fn plugin_id(&self) -> &String {
-    /// #         unimplemented!()
-    /// #     }
-    /// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+    /// #     fn plugin_id(&self) -> &String { &self.id }
     /// # }
     /// # impl SoundSourcePlugin {
-    /// #     pub fn new(id: &str) -> Self { Self {} }
-    /// # }
-    /// # #[derive(Debug)]
-    /// # struct SoundEffectPlugin;
-    /// # impl Plugin for SoundEffectPlugin {
-    /// #     fn plugin_id(&self) -> &String {
-    /// #         unimplemented!()
-    /// #     }
-    /// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
-    /// # }
-    /// # impl SoundEffectPlugin {
-    /// #     pub fn new(id: &str) -> Self { Self {} }
+    /// #     pub fn new(id: &str) -> Self { Self { id: id.into() } }
     /// # }
     /// # const PLUGIN_NAME: &str = "RandomSource";
-    /// # const OTHER_PLUGIN_NAME: &str = "DelayEffect";
     ///
     /// #[no_mangle]
-    /// pub extern "C" fn register_sources(registrar: &mut PluginRegistrar<SoundSourcePlugin>) {
-    ///     registrar.register(SoundSourcePlugin::new(PLUGIN_NAME));
-    /// }
-    ///
-    /// #[no_mangle]
-    /// pub extern "C" fn register_effects(registrar: &mut PluginRegistrar<SoundEffectPlugin>) {
-    ///     registrar.register(SoundEffectPlugin::new(OTHER_PLUGIN_NAME));
+    /// pub extern "C" fn register_sources(registrar: &mut PluginRegistrar) {
+    ///     registrar.register(Arc::new(SoundSourcePlugin::new(PLUGIN_NAME)));
     /// }
     /// ```
     ///
@@ -433,7 +395,7 @@ where
 
     ///
     /// 返回具有给定插件标识符的插件（如果存在），否则返回 `None`。
-    pub fn get(&self, plugin_id: &str) -> Option<Arc<T>> {
+    pub fn get(&self, plugin_id: &str) -> Option<Arc<dyn Plugin>> {
         let plugins = self.plugins.read().unwrap();
         plugins.get(plugin_id).map(|p| p.plugin.clone())
     }
@@ -441,7 +403,7 @@ where
     ///
     /// 返回此插件管理器中注册的所有插件，以向量形式返回。
     ///
-    pub fn plugins(&self) -> Vec<Arc<T>> {
+    pub fn plugins(&self) -> Vec<Arc<dyn Plugin>> {
         let plugins = self.plugins.read().unwrap();
         plugins.values().map(|p| p.plugin.clone()).collect()
     }
@@ -825,7 +787,7 @@ where
             &from_library.file_name
         );
         let load_fn = unsafe {
-            let loader_fn: Symbol<'_, PluginRegistrationFn<T>> = from_library
+            let loader_fn: Symbol<'_, PluginRegistrationFn> = from_library
                 .library
                 .get(self.registration_fn_name.as_slice())
                 .map_err(|e| {
@@ -914,7 +876,7 @@ mod tests {
 
     #[test]
     fn test_state_machine_plugin_not_found() {
-        let mut mgr: PluginManager<MockPlugin> = PluginManager::default();
+        let mut mgr: PluginManager = PluginManager::default();
         assert!(matches!(
             mgr.enable_plugin("missing").unwrap_err().kind(),
             ErrorKind::PluginNotFound(_)
@@ -977,7 +939,7 @@ mod tests {
         }
 
         let db = SqliteDatabase::in_memory().unwrap();
-        let mut mgr: PluginManager<DepPlugin> =
+        let mut mgr: PluginManager =
             PluginManager::default().with_database(std::sync::Arc::new(db));
 
         // 注册三个插件(A、B、C),B 依赖 A,C run_after A。

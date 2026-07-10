@@ -11,21 +11,13 @@
 
 ```rust,no_run
 use plugkit::host::{host_router, HostApp, serve_frontend_handler};
-use plugkit::manager::PluginManager;
-use plugkit::plugin::Plugin;
 use std::sync::Arc;
-
-// 你的插件类型
-#[derive(Debug)] struct MyPlugin { id: String }
-impl Plugin for MyPlugin {
-    fn plugin_id(&self) -> &String { &self.id }
-}
 
 #[tokio::main]
 async fn main() {
-    let app = HostApp::<MyPlugin>::new();
+    let app = HostApp::new();
     let state = Arc::new(std::sync::RwLock::new(app));
-    let router = host_router::<MyPlugin>()
+    let router = host_router()
         .fallback(serve_frontend_handler)
         .with_state(state);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -86,24 +78,26 @@ pub trait HostContext: Send + Sync {
 ///
 /// 封装了 [`PluginManager`]、库加载记录、cron 调度状态和插件 UI 嵌入目录。
 #[derive(Debug)]
-pub struct HostApp<T: Plugin> {
+pub struct HostApp {
     /// 插件管理器（核心）。
-    pub manager: PluginManager<T>,
+    pub manager: PluginManager,
     /// 记录每个库路径 → 它贡献的插件 ID 列表。
     pub library_plugins: HashMap<PathBuf, Vec<String>>,
     /// 每个插件的 cron 取消标志（start 时注册，stop 时置 true）。
     pub cron_flags: HashMap<String, Vec<Arc<AtomicBool>>>,
     /// 插件 UI 嵌入目录映射：base_dir（如 `"afp_plugin/ui"`）→ 编译期嵌入的 `Dir`。
     pub plugin_ui_dirs: HashMap<String, &'static Dir<'static>>,
+    /// 插件 dylib 搜索目录（宿主配置）。`find_dylib_paths()` 会合并这些目录与默认启发式。
+    pub plugin_search_dirs: Vec<PathBuf>,
 }
 
-impl<T: Plugin> Default for HostApp<T> {
+impl Default for HostApp {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Plugin> HostApp<T> {
+impl HostApp {
     /// 创建一个新的宿主上下文。
     pub fn new() -> Self {
         Self {
@@ -111,7 +105,17 @@ impl<T: Plugin> HostApp<T> {
             library_plugins: HashMap::new(),
             cron_flags: HashMap::new(),
             plugin_ui_dirs: HashMap::new(),
+            plugin_search_dirs: Vec::new(),
         }
+    }
+
+    /// 追加插件 dylib 搜索目录（builder 风格，可链式多次调用）。
+    ///
+    /// `find_dylib_paths()` 会合并这些目录与默认启发式（cwd/target、exe 同目录等）。
+    /// 宿主通常指向 `plugins/` 目录或各插件 crate 的 `target/debug`。
+    pub fn with_plugin_search_dir(mut self, dir: impl AsRef<std::path::Path>) -> Self {
+        self.plugin_search_dirs.push(dir.as_ref().to_path_buf());
+        self
     }
 
     /// 设置数据库后端。
@@ -130,7 +134,7 @@ impl<T: Plugin> HostApp<T> {
 }
 
 /// 共享状态的类型别名。
-pub type SharedState<T> = Arc<RwLock<HostApp<T>>>;
+pub type SharedState = Arc<RwLock<HostApp>>;
 
 // ------------------------------------------------------------------------------------------------
 // API 请求/响应类型
@@ -216,7 +220,7 @@ pub struct PluginInfo {
 /// 把插件转为前端可消费的 [`PluginInfo`]。
 ///
 /// 菜单仅在 `Enabled` / `Running` 状态下对外暴露。
-pub fn plugin_to_info<T: Plugin>(p: &T, status: PluginStatus) -> PluginInfo {
+pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
     let meta = p.metadata();
     let menu = if matches!(status, PluginStatus::Enabled | PluginStatus::Running) {
         meta.menus().to_vec()
@@ -263,7 +267,7 @@ pub fn plugin_err_to_response(
 ///
 /// 扫描 `target/debug/`、`target/release/`、`bin/plugin/` 等常见路径，
 /// 按 `.dylib` / `.so` / `.dll` 扩展名匹配。
-pub fn find_dylib_paths() -> Vec<PathBuf> {
+pub fn find_dylib_paths(extra_dirs: &[std::path::PathBuf]) -> Vec<PathBuf> {
     let mut results = Vec::new();
 
     let project_dirs: Vec<PathBuf> = {
@@ -287,6 +291,8 @@ pub fn find_dylib_paths() -> Vec<PathBuf> {
                 }
             }
         }
+        // 宿主通过 `HostApp::with_plugin_search_dir` 注入的搜索目录。
+        dirs.extend(extra_dirs.iter().cloned());
         dirs
     };
 
@@ -327,13 +333,11 @@ pub fn clean_lib_name(file_stem: &str) -> String {
 // API Handlers
 // ------------------------------------------------------------------------------------------------
 
-async fn handle_scan_libraries<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
-) -> Json<LibraryScanResult> {
+async fn handle_scan_libraries(State(state): State<SharedState>) -> Json<LibraryScanResult> {
     let ctx = state.read().unwrap();
     let mut libs: Vec<LibraryInfo> = Vec::new();
 
-    for path in find_dylib_paths() {
+    for path in find_dylib_paths(&ctx.plugin_search_dirs) {
         let file_name = path.file_name().unwrap().to_string_lossy().to_string();
         let stem = path.file_stem().unwrap().to_string_lossy().to_string();
         let name = clean_lib_name(&stem);
@@ -352,12 +356,12 @@ async fn handle_scan_libraries<T: Plugin + Send + Sync + 'static>(
     Json(LibraryScanResult { libraries: libs })
 }
 
-async fn handle_load_library<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_load_library(
+    State(state): State<SharedState>,
     Path(name): Path<String>,
 ) -> Result<Json<LoadResult>, (StatusCode, Json<ApiMessage>)> {
     // 查找匹配的库文件
-    let path = find_dylib_paths()
+    let path = find_dylib_paths(&state.read().unwrap().plugin_search_dirs)
         .into_iter()
         .find(|p| {
             p.file_stem()
@@ -419,9 +423,7 @@ async fn handle_load_library<T: Plugin + Send + Sync + 'static>(
     }))
 }
 
-async fn handle_list_plugins<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
-) -> Json<Vec<PluginInfo>> {
+async fn handle_list_plugins(State(state): State<SharedState>) -> Json<Vec<PluginInfo>> {
     let ctx = state.read().unwrap();
     let plugins = ctx.manager.plugins();
     Json(
@@ -439,8 +441,8 @@ async fn handle_list_plugins<T: Plugin + Send + Sync + 'static>(
     )
 }
 
-async fn handle_get_plugin<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_get_plugin(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<PluginInfo>, (StatusCode, Json<ApiMessage>)> {
     let ctx = state.read().unwrap();
@@ -460,8 +462,8 @@ async fn handle_get_plugin<T: Plugin + Send + Sync + 'static>(
     Ok(Json(plugin_to_info(&*plugin, status)))
 }
 
-async fn handle_unload_plugin<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_unload_plugin(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let mut ctx = state.write().unwrap();
@@ -493,9 +495,7 @@ async fn handle_unload_plugin<T: Plugin + Send + Sync + 'static>(
     }))
 }
 
-async fn handle_unload_all<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
-) -> Json<ApiMessage> {
+async fn handle_unload_all(State(state): State<SharedState>) -> Json<ApiMessage> {
     let mut ctx = state.write().unwrap();
     // 停止所有 cron 任务
     for (_, flags) in ctx.cron_flags.drain() {
@@ -512,8 +512,8 @@ async fn handle_unload_all<T: Plugin + Send + Sync + 'static>(
 }
 
 // 生命周期状态机
-async fn handle_enable_plugin<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_enable_plugin(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let mut ctx = state.write().unwrap();
@@ -526,8 +526,8 @@ async fn handle_enable_plugin<T: Plugin + Send + Sync + 'static>(
     }))
 }
 
-async fn handle_disable_plugin<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_disable_plugin(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let mut ctx = state.write().unwrap();
@@ -545,8 +545,8 @@ async fn handle_disable_plugin<T: Plugin + Send + Sync + 'static>(
     }))
 }
 
-async fn handle_start_plugin<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_start_plugin(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     let cron_specs = {
@@ -591,8 +591,8 @@ async fn handle_start_plugin<T: Plugin + Send + Sync + 'static>(
     }))
 }
 
-async fn handle_stop_plugin<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_stop_plugin(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
     {
@@ -612,8 +612,8 @@ async fn handle_stop_plugin<T: Plugin + Send + Sync + 'static>(
     }))
 }
 
-async fn handle_list_cron<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_list_cron(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
 ) -> Result<Json<Vec<CronInfo>>, (StatusCode, Json<ApiMessage>)> {
     let ctx = state.read().unwrap();
@@ -638,8 +638,8 @@ async fn handle_list_cron<T: Plugin + Send + Sync + 'static>(
     Ok(Json(crons))
 }
 
-async fn handle_run_cron<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+async fn handle_run_cron(
+    State(state): State<SharedState>,
     Path(id): Path<String>,
     Json(req): Json<CronRunRequest>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
@@ -674,8 +674,8 @@ async fn handle_run_cron<T: Plugin + Send + Sync + 'static>(
 /// 未命中则回退到 `{exe_dir}/plugin/{base_dir}/dist/` 磁盘路径。
 ///
 /// 注册为 route：`/plugin-files/*path`
-pub async fn handle_serve_plugin_ui<T: Plugin + Send + Sync + 'static>(
-    State(state): State<SharedState<T>>,
+pub async fn handle_serve_plugin_ui(
+    State(state): State<SharedState>,
     Path(path): Path<String>,
 ) -> Result<Response<Body>, (StatusCode, Json<ApiMessage>)> {
     // 1) 从编译期嵌入的 plugin_ui_dirs 查找
@@ -821,7 +821,7 @@ pub async fn serve_frontend_handler(req: Request<Body>) -> Response<Body> {
 
 /// 创建通用插件宿主管理路由。
 ///
-/// 返回的 `Router` 包含以下端点（所有端点需通过 `.with_state(state)` 注入 `SharedState<T>`）：
+/// 返回的 `Router` 包含以下端点（所有端点需通过 `.with_state(state)` 注入 `SharedState`）：
 ///
 /// | 方法 | 路径 | 说明 |
 /// |------|------|------|
@@ -842,28 +842,28 @@ pub async fn serve_frontend_handler(req: Request<Body>) -> Response<Body> {
 /// 调用方需在返回的 Router 上补充：
 /// - `fallback(serve_frontend_handler)` 或自定义 fallback
 /// - 业务路由（如发布新闻）
-pub fn host_router<T: Plugin + Send + Sync + 'static>() -> Router<SharedState<T>> {
+pub fn host_router() -> Router<SharedState> {
     Router::new()
         // 插件库管理
-        .route("/api/libraries", get(handle_scan_libraries::<T>))
-        .route("/api/libraries/:name/load", post(handle_load_library::<T>))
+        .route("/api/libraries", get(handle_scan_libraries))
+        .route("/api/libraries/:name/load", post(handle_load_library))
         // 插件管理
-        .route("/api/plugins", get(handle_list_plugins::<T>))
+        .route("/api/plugins", get(handle_list_plugins))
         .route(
             "/api/plugins/:id",
-            get(handle_get_plugin::<T>).delete(handle_unload_plugin::<T>),
+            get(handle_get_plugin).delete(handle_unload_plugin),
         )
         // 插件生命周期状态机
-        .route("/api/plugins/:id/enable", post(handle_enable_plugin::<T>))
-        .route("/api/plugins/:id/disable", post(handle_disable_plugin::<T>))
-        .route("/api/plugins/:id/start", post(handle_start_plugin::<T>))
-        .route("/api/plugins/:id/stop", post(handle_stop_plugin::<T>))
-        .route("/api/plugins/:id/cron", get(handle_list_cron::<T>))
-        .route("/api/plugins/:id/cron/run", post(handle_run_cron::<T>))
+        .route("/api/plugins/:id/enable", post(handle_enable_plugin))
+        .route("/api/plugins/:id/disable", post(handle_disable_plugin))
+        .route("/api/plugins/:id/start", post(handle_start_plugin))
+        .route("/api/plugins/:id/stop", post(handle_stop_plugin))
+        .route("/api/plugins/:id/cron", get(handle_list_cron))
+        .route("/api/plugins/:id/cron/run", post(handle_run_cron))
         // 批量操作
-        .route("/api/plugins", delete(handle_unload_all::<T>))
+        .route("/api/plugins", delete(handle_unload_all))
         // 插件前端 UI 静态文件
-        .route("/plugin-files/*path", get(handle_serve_plugin_ui::<T>))
+        .route("/plugin-files/*path", get(handle_serve_plugin_ui))
         // CORS
         .layer(CorsLayer::permissive())
 }

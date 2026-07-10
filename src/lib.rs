@@ -43,19 +43,17 @@ use std::sync::Arc;
 # }
 
 fn main() {
-    let mut plugin_manager: PluginManager<SoundEffectPlugin> = PluginManager::default();
+    let mut plugin_manager: PluginManager = PluginManager::default();
 
     plugin_manager
         .load_plugins_from("libsound_one.dylib".as_ref())
         .unwrap();
 
-    let plugin: Arc<SoundEffectPlugin> = plugin_manager
+    let plugin: Arc<dyn plugkit::plugin::Plugin> = plugin_manager
         .get("sound_one::sound_one::DelayEffect")
         .unwrap();
 
     println!("{}", plugin.plugin_id());
-
-    plugin.play();
 }
 ```
 

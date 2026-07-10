@@ -1,6 +1,5 @@
 /** qiankun 微前端运行时 */
 export { loadMicroApp, registerMicroApps, start, initGlobalState } from 'qiankun';
-export type { MicroApp, RegistrableApp } from 'qiankun';
 
 /**
  * 计算插件的 qiankun 入口 URL。
