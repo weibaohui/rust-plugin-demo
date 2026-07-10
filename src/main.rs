@@ -18,8 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = SqliteDatabase::in_memory()?;
     let app = HostApp::new()
         .with_database(Arc::new(db))
-        .with_plugin_search_dir("examples/news/plugins/afp_plugin/target/debug")
-        .with_plugin_search_dir("examples/news/plugins/reuters_plugin/target/debug");
+        .with_plugin_search_dir("bin/plugins");
     let state: plugkit::host::SharedState = Arc::new(std::sync::RwLock::new(app));
 
     let router = host_router()
