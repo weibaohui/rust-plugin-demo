@@ -3,8 +3,10 @@ name = "news_server"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+
 [dependencies]
-dygpi = { version = "0.1", path = ".." }
+plugkit = { version = "0.2", path = "../../.." }
 news_api = { version = "0.1", path = "../news_api" }
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }

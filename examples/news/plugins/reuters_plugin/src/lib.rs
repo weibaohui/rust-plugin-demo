@@ -1,19 +1,19 @@
 /*!
-法新社（AFP）新闻机构插件。
+路透社新闻机构插件。
 
-通过 [`afp_format`] 注册一个配置了法新社格式化风格的 [`NewsAgencyPlugin`] 实例。
+通过 [`reuters_format`] 注册一个配置了路透社格式化风格的 [`NewsAgencyPlugin`] 实例。
 编译期将 `ui/dist/` 嵌入到本插件的 `.so`/`.dylib` 中，使宿主可直接从内存服务前端。
 */
 
-use dygpi::plugin::PluginRegistrar;
+use plugkit::plugin::PluginRegistrar;
 use include_dir::{include_dir, Dir};
-use news_api::{afp_format, NewsAgencyPlugin, PluginMenu};
+use news_api::{reuters_format, NewsAgencyPlugin, PluginMenu};
 
 // ------------------------------------------------------------------------------------------------
 // 编译期嵌入的 `ui/dist/` 目录
 // ------------------------------------------------------------------------------------------------
 
-/// 由 `include_dir!` 宏在编译期把整个 `afp_plugin/ui/dist/` 目录打包进本 .so。
+/// 由 `include_dir!` 宏在编译期把整个 `reuters_plugin/ui/dist/` 目录打包进本 .so。
 /// 路径在二进制内部是只读的，但可以通过 `Dir` 的 API 按需遍历。
 pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 
@@ -24,15 +24,15 @@ pub static UI_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlugin>) {
     registrar.register(
-        NewsAgencyPlugin::new(PLUGIN_ID, "Agence France-Presse", afp_format)
-            // 将嵌入的 ui/dist 绑定到本插件实例，基目录 "afp_plugin/ui"，
+        NewsAgencyPlugin::new(PLUGIN_ID, "Reuters", reuters_format)
+            // 将嵌入的 ui/dist 绑定到本插件实例，基目录 "reuters_plugin/ui"，
             // 宿主 news_server 据此从内存服务 qiankun 子应用。
-            .with_ui_dist("afp_plugin/ui", &UI_DIST)
-            // 声明左侧菜单：法新社分组 → 控制面板（点击进入 qiankun 子应用）。
+            .with_ui_dist("reuters_plugin/ui", &UI_DIST)
+            // 声明左侧菜单：路透社分组 → 控制面板（点击进入 qiankun 子应用）。
             .with_menu(PluginMenu {
-                key: "afp".into(),
-                title: "法新社".into(),
-                icon: Some("📡".into()),
+                key: "reuters".into(),
+                title: "路透社".into(),
+                icon: Some("📰".into()),
                 route: None,
                 order: 100,
                 children: vec![PluginMenu {
@@ -45,11 +45,11 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
                 }],
             })
             // metadata 声明(参考 npm package.json + k8m Meta)
-            .with_metadata_description("法新社新闻机构插件,AFP 格式化风格")
+            .with_metadata_description("路透社新闻机构插件,Reuters 格式化风格")
             .with_metadata_author("AtomGit <noreply@atomgit.com>")
             .with_metadata_homepage("https://github.com/weibaohui/rust-plugin-demo")
             .with_metadata_license("MIT")
-            .with_metadata_tables(&["afp_items"])
+            .with_metadata_tables(&["reuters_items"])
             .with_metadata_dependencies(&[])
             .with_metadata_run_after(&[])
             // 生命周期钩子回调(演示用法:每个钩子自定义行为)
@@ -64,7 +64,7 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
 // ------------------------------------------------------------------------------------------------
 // 插件生命周期钩子
 // ------------------------------------------------------------------------------------------------
-// 本插件通过 `NewsAgencyPlugin` 实现 `dygpi::plugin::Plugin` trait,钩子在
+// 本插件通过 `NewsAgencyPlugin` 实现 `plugkit::plugin::Plugin` trait,钩子在
 // `news_api/src/lib.rs` 的 `impl Plugin` 中实现。宿主(news_server)按状态机调用:
 //
 //   load    → on_load      + on_install   加载库 + 数据初始化(幂等)         → Loaded
@@ -88,23 +88,23 @@ pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar<NewsAgencyPlu
 // 宿主(news_server)可在其标准错误看到。生产中可通过 HostContext.log_message 上报日志。
 
 fn on_enable() {
-    eprintln!("[afp] enabled: 初始化资源,菜单可见");
+    eprintln!("[reuters] enabled: 初始化资源,菜单可见");
 }
 
 fn on_start() {
-    eprintln!("[afp] started: 后台任务就绪,heartbeat 30s");
+    eprintln!("[reuters] started: 后台任务就绪,heartbeat 30s");
 }
 
 fn on_stop() {
-    eprintln!("[afp] stopped: 后台任务停止");
+    eprintln!("[reuters] stopped: 后台任务停止");
 }
 
 fn on_disable() {
-    eprintln!("[afp] disabled: 菜单隐藏,收敛能力");
+    eprintln!("[reuters] disabled: 菜单隐藏,收敛能力");
 }
 
 fn on_cron() {
-    eprintln!("[afp] heartbeat: 定时检查");
+    eprintln!("[reuters] heartbeat: 定时检查");
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -116,5 +116,5 @@ const PLUGIN_ID: &str = concat!(
     "::",
     module_path!(),
     "::",
-    "AfpAgency"
+    "ReutersAgency"
 );

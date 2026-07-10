@@ -25,8 +25,8 @@
 下面的示例展示了插件管理器从特定库加载插件，然后从已加载的集合中按 ID 检索单个插件。
 
 ```rust,no_run
-use dygpi::manager::PluginManager;
-use dygpi::plugin::Plugin;
+use plugkit::manager::PluginManager;
+use plugkit::plugin::Plugin;
 use std::sync::Arc;
 # const EFFECT_PLUGIN_ID: &str = "sound_effects";
 # #[derive(Debug)]
@@ -35,8 +35,8 @@ use std::sync::Arc;
 #     fn plugin_id(&self) -> &String {
 #         todo!()
 #     }
-#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
 # }
 # impl SoundEffectPlugin {
 #     pub fn play(&self) {}
@@ -110,3 +110,6 @@ pub mod manager;
 pub mod metadata;
 
 pub mod database;
+
+/// 通用插件宿主模块。提供 axum HTTP 路由用于插件加载/卸载/生命周期/cron/UI 服务。
+pub mod host;

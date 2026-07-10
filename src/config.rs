@@ -8,9 +8,9 @@
 其中包含文件中指定的所有插件库。
 
 ```rust
-use dygpi::config::PluginManagerConfiguration;
-use dygpi::manager::PluginManager;
-use dygpi::plugin::Plugin;
+use plugkit::config::PluginManagerConfiguration;
+use plugkit::manager::PluginManager;
+use plugkit::plugin::Plugin;
 # const EFFECT_PLUGIN_ID: &str = "sound_effects";
 # #[derive(Debug)]
 # struct SoundEffectPlugin;
@@ -18,8 +18,8 @@ use dygpi::plugin::Plugin;
 #     fn plugin_id(&self) -> &String {
 #         todo!()
 #     }
-#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
 # }
 # fn load_config_file() -> PluginManagerConfiguration { PluginManagerConfiguration::default() }
 
@@ -38,7 +38,7 @@ let plugin_manager: PluginManager<SoundEffectPlugin> =
 给定以下简单的配置，我们可以将其保存为 Serde 支持的任何格式。
 
 ```rust
-use dygpi::config::PluginManagerConfiguration;
+use plugkit::config::PluginManagerConfiguration;
 
 let mut config = PluginManagerConfiguration::default();
 let _ = config.insert("sound_effects", &["beep".as_ref(), "boop".as_ref()]);
@@ -101,7 +101,7 @@ use std::path::{Path, PathBuf};
 /// 因此可以包含在配置文件中。
 ///
 /// ```rust
-/// use dygpi::config::PluginManagerConfiguration;
+/// use plugkit::config::PluginManagerConfiguration;
 /// use serde::{Deserialize, Serialize};
 ///
 /// #[derive(Deserialize, Serialize)]
@@ -197,9 +197,9 @@ impl PluginManagerConfiguration {
     /// # 示例
     ///
     /// ```rust,no_run
-    /// use dygpi::config::PluginManagerConfiguration;
-    /// use dygpi::manager::PluginManager;
-    /// # use dygpi::plugin::Plugin;
+    /// use plugkit::config::PluginManagerConfiguration;
+    /// use plugkit::manager::PluginManager;
+    /// # use plugkit::plugin::Plugin;
     /// # #[derive(Debug)] struct SoundEngine;
     /// # #[derive(Debug)] struct MediaStream;
     /// # #[derive(Debug)]
@@ -210,8 +210,8 @@ impl PluginManagerConfiguration {
     /// #     fn plugin_id(&self) -> &String {
     /// #         &self.id
     /// #     }
-    /// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+    /// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
     /// # }
     /// # impl SoundEffectPlugin {
     /// #     pub fn new(id: &str) -> Self { todo!() }

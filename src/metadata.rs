@@ -13,7 +13,7 @@
 # 示例
 
 ```ignore
-use dygpi::metadata::{PluginMetadata, PluginMenu};
+use plugkit::metadata::{PluginMetadata, PluginMenu};
 
 static META: PluginMetadata = PluginMetadata::new(
     "afp_plugin",
@@ -126,7 +126,7 @@ pub struct PluginMenu {
 ///
 /// 定时任务规格。宿主在 `on_start` 后据此调度,`on_stop` 时注销。
 ///
-/// **注意**:dygpi 框架自身不依赖 async,定时调度由宿主实现(如 `tokio::spawn` sleep loop)。
+/// **注意**:plugkit 框架自身不依赖 async,定时调度由宿主实现(如 `tokio::spawn` sleep loop)。
 /// 框架仅负责传递规格与触发 `on_cron`。
 ///
 #[derive(Debug, Clone)]

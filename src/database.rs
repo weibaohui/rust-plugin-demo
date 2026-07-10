@@ -18,9 +18,9 @@ SQLite 数据库操作接口。
 # 示例
 
 ```ignore
-use dygpi::database::DatabaseExt;
+use plugkit::database::DatabaseExt;
 
-fn on_install(db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
+fn on_install(db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
     db.execute(r#"
         CREATE TABLE IF NOT EXISTS demo_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +31,7 @@ fn on_install(db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
     Ok(())
 }
 
-fn on_uninstall(db: &dyn DatabaseExt, keep_data: bool) -> dygpi::error::Result<()> {
+fn on_uninstall(db: &dyn DatabaseExt, keep_data: bool) -> plugkit::error::Result<()> {
     if !keep_data {
         db.execute("DROP TABLE IF EXISTS demo_items")?;
     }

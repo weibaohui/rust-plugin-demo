@@ -7,9 +7,9 @@
 定义了 [`HostContext`] trait，让插件可以反向调用宿主的方法并获取宿主信息。
 */
 
-use dygpi::database::DatabaseExt;
-use dygpi::metadata::PluginMetadata;
-use dygpi::plugin::Plugin;
+use plugkit::database::DatabaseExt;
+use plugkit::metadata::PluginMetadata;
+use plugkit::plugin::Plugin;
 use serde::Serialize;
 
 // 让插件可以嵌入自身的 `ui/dist/` 目录树，并在宿主需要时回放。
@@ -153,7 +153,7 @@ impl Plugin for NewsAgencyPlugin {
         if let Some(license) = &self.metadata_license {
             meta = meta.with_license(license);
         }
-        // 菜单树:news_api::PluginMenu 转为 dygpi::metadata::PluginMenu
+        // 菜单树:news_api::PluginMenu 转为 plugkit::metadata::PluginMenu
         if !self.menus.is_empty() {
             meta = meta.with_menus(self.menus.iter().map(convert_menu).collect());
         }
@@ -163,17 +163,17 @@ impl Plugin for NewsAgencyPlugin {
         meta
     }
 
-    fn on_load(&self, _db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
+    fn on_load(&self, _db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' loaded.", self.agency_name);
         Ok(())
     }
 
-    fn on_unload(&self, _db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
+    fn on_unload(&self, _db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' unloaded.", self.agency_name);
         Ok(())
     }
 
-    fn on_install(&self, db: &dyn DatabaseExt) -> dygpi::error::Result<()> {
+    fn on_install(&self, db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' installed.", self.agency_name);
         // 演示:按 metadata.tables() 声明逐个建表(幂等)
         for table in &self.metadata_tables {
@@ -187,7 +187,7 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn on_uninstall(&self, db: &dyn DatabaseExt, keep_data: bool) -> dygpi::error::Result<()> {
+    fn on_uninstall(&self, db: &dyn DatabaseExt, keep_data: bool) -> plugkit::error::Result<()> {
         log::info!(
             "News agency '{}' uninstalled (keep_data={}).",
             self.agency_name,
@@ -201,7 +201,7 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn on_enable(&self) -> dygpi::error::Result<()> {
+    fn on_enable(&self) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' enabled.", self.agency_name);
         if let Some(f) = self.on_enable_fn {
             f();
@@ -209,7 +209,7 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn on_disable(&self) -> dygpi::error::Result<()> {
+    fn on_disable(&self) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' disabled.", self.agency_name);
         if let Some(f) = self.on_disable_fn {
             f();
@@ -217,7 +217,7 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn on_start(&self) -> dygpi::error::Result<()> {
+    fn on_start(&self) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' started.", self.agency_name);
         if let Some(f) = self.on_start_fn {
             f();
@@ -225,7 +225,7 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn on_stop(&self) -> dygpi::error::Result<()> {
+    fn on_stop(&self) -> plugkit::error::Result<()> {
         log::info!("News agency '{}' stopped.", self.agency_name);
         if let Some(f) = self.on_stop_fn {
             f();
@@ -233,7 +233,7 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn on_cron(&self, name: &str) -> dygpi::error::Result<()> {
+    fn on_cron(&self, name: &str) -> plugkit::error::Result<()> {
         log::info!("[{}] cron tick: {}", self.agency_name, name);
         if let Some(f) = self.on_cron_fn {
             f();
@@ -241,8 +241,8 @@ impl Plugin for NewsAgencyPlugin {
         Ok(())
     }
 
-    fn cron_specs(&self) -> Vec<dygpi::metadata::CronSpec> {
-        vec![dygpi::metadata::CronSpec {
+    fn cron_specs(&self) -> Vec<plugkit::metadata::CronSpec> {
+        vec![plugkit::metadata::CronSpec {
             name: "heartbeat".to_string(),
             interval_secs: 30,
         }]
@@ -543,11 +543,11 @@ pub fn tass_format(ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArt
 }
 
 // ------------------------------------------------------------------------------------------------
-// 私有辅助:news_api::PluginMenu → dygpi::metadata::PluginMenu
+// 私有辅助:news_api::PluginMenu → plugkit::metadata::PluginMenu
 // ------------------------------------------------------------------------------------------------
 
-fn convert_menu(m: &PluginMenu) -> dygpi::metadata::PluginMenu {
-    dygpi::metadata::PluginMenu {
+fn convert_menu(m: &PluginMenu) -> plugkit::metadata::PluginMenu {
+    plugkit::metadata::PluginMenu {
         key: m.key.clone(),
         title: m.title.clone(),
         icon: m.icon.clone(),

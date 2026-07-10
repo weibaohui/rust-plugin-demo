@@ -13,6 +13,7 @@
 /bin
 Cargo.lock
 **/*.rs.bk
+**/target/
 
 ## ------------------------------------------------------------------------------------------------
 # Files required for CI integration (Travis)
@@ -28,17 +29,10 @@ frontend/dist/
 frontend/package-lock.json
 
 # 任意插件的 UI 目录:node_modules / 构建产物 / 包锁 / vite/tsc 缓存
-# 不绑定具体插件名,新增插件到 plugins/<name>/ 也会自动适用
-**/plugins/*/ui/node_modules/
-**/plugins/*/ui/dist/
-**/plugins/*/ui/.vite/
-**/plugins/*/ui/*.tsbuildinfo
-**/plugins/*/ui/package-lock.json
-**/plugins/*/release/
-
-## ------------------------------------------------------------------------------------------------
-# Plugin UI legacy compiled output (kept during migration; remove after first clean build)
-**/plugins/*/ui/panel.js
-.playwright-cli/
-/plugins/afp_plugin/release/libafp_plugin.dylib
-/plugins/reuters_plugin/release/libreuters_plugin.dylib
+# 不绑定具体插件名,新增插件到 examples/news/plugins/<name>/ 也会自动适用
+**/ui/node_modules/
+**/ui/dist/
+**/ui/.vite/
+**/ui/*.tsbuildinfo
+**/ui/package-lock.json
+**/release/

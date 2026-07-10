@@ -6,7 +6,7 @@
 # 示例 - 定义插件
 
 ```rust
-use dygpi::plugin::Plugin;
+use plugkit::plugin::Plugin;
 
 # #[derive(Debug)] struct SoundEngine;
 # #[derive(Debug)] struct MediaStream;
@@ -22,13 +22,13 @@ impl Plugin for SoundEffectPlugin {
         &self.id
     }
 
-    fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> {
+    fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> {
         // 连接到音频引擎
         // 加载媒体流
         Ok(())
     }
 
-    fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> {
+    fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> {
         // 卸载媒体流
         // 断开音频引擎连接
         Ok(())
@@ -44,8 +44,8 @@ impl SoundEffectPlugin {
 # 示例 - 注册插件
 
 ```rust
-use dygpi::plugin::PluginRegistrar;
-# use dygpi::plugin::Plugin;
+use plugkit::plugin::PluginRegistrar;
+# use plugkit::plugin::Plugin;
 # #[derive(Debug)] struct SoundEngine;
 # #[derive(Debug)] struct MediaStream;
 # #[derive(Debug)]
@@ -58,8 +58,8 @@ use dygpi::plugin::PluginRegistrar;
 #     fn plugin_id(&self) -> &String {
 #         &self.id
 #     }
-#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
 # }
 # impl SoundEffectPlugin {
 #     pub fn new(id: &str) -> Self { unimplemented!() }
@@ -216,6 +216,17 @@ pub trait Plugin: Any + Debug + Sync + Send {
     fn cron_specs(&self) -> Vec<CronSpec> {
         Vec::new()
     }
+
+    /// 插件 UI 的基目录（相对路径，如 `"afp_plugin/ui"`）。
+    /// 宿主据此计算 `ui_entry` URL 并从内存/磁盘服务静态文件。默认 None 表示无 UI。
+    fn ui_base_dir(&self) -> Option<&str> {
+        None
+    }
+
+    /// 插件是否有嵌入的前端 UI。
+    fn has_ui(&self) -> bool {
+        self.ui_base_dir().is_some()
+    }
 }
 
 ///
@@ -223,8 +234,8 @@ pub trait Plugin: Any + Debug + Sync + Send {
 /// 该函数构造插件实例，并使用注册器作为回调将插件注册到插件管理器。
 ///
 /// ```rust
-/// use dygpi::plugin::PluginRegistrar;
-/// # use dygpi::plugin::Plugin;
+/// use plugkit::plugin::PluginRegistrar;
+/// # use plugkit::plugin::Plugin;
 ///
 /// # #[derive(Debug)] struct SoundEngine;
 /// # #[derive(Debug)] struct MediaStream;
@@ -238,8 +249,8 @@ pub trait Plugin: Any + Debug + Sync + Send {
 /// #     fn plugin_id(&self) -> &String {
 /// #         &self.id
 /// #     }
-/// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-/// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+/// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+/// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
 /// # }
 /// # impl SoundEffectPlugin {
 /// #     pub fn new(id: &str) -> Self { unimplemented!() }

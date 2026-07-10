@@ -1,22 +1,17 @@
 [package]
-name = "dygpi"
-description = "Provides support for 'Dynamic Generic PlugIns', library based plugins for Rust."
-authors = ["Simon Johnston <johnstonskj@gmail.com>"]
-version = "0.1.5"
-edition = "2018"
-documentation = "https://docs.rs/dygpi/"
-repository = "https://github.com/johnstonskj/rust-dygpi.git"
+name = "plugkit"
+description = "Rust 通用插件管理框架 — 基于动态库加载，支持生命周期状态机、cron 调度、UI 嵌入与菜单聚合，可开箱即用地构建插件式宿主应用。"
+authors = ["AtomGit <noreply@atomgit.com>"]
+version = "0.2.0"
+edition = "2021"
+documentation = "https://docs.rs/plugkit/"
+repository = "https://github.com/weibaohui/rust-plugin-demo.git"
 license = "MIT"
 readme = "README.md"
 publish = true
 
 [workspace]
-members = [
-    "news_api",
-    "news_server",
-    "plugins/afp_plugin",
-    "plugins/reuters_plugin",
-]
+members = []
 
 [features]
 default = ["config_serde"]
@@ -28,8 +23,19 @@ log = "0.4"
 search_path = "0.1"
 rusqlite = { version = "0.31", features = ["bundled"] }
 parking_lot = "0.12"
-
 serde = { version = "1.0", features = ["derive"], optional = true }
+
+# host 模块依赖（通用插件宿主能力）
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+walkdir = "2"
+mime_guess = "2"
+chrono = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+include_dir = "0.7"
+serde_json = "1.0"
 
 [build-dependencies]
 rustc_version = "0.4"
@@ -38,8 +44,3 @@ rustc_version = "0.4"
 toml = "0.8"
 serde_json = "1.0"
 serde_yaml = "0.9"
-
-[dev-dependencies.cargo-husky]
-version = "1"
-default-features = false # Disable features which are enabled by default
-features = ["precommit-hook", "run-cargo-fmt", "run-cargo-test" ]

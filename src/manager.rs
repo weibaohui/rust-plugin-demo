@@ -11,8 +11,8 @@
 类型提供了更高级的抽象。
 
 ```rust,no_run
-use dygpi::manager::PluginManager;
-use dygpi::plugin::Plugin;
+use plugkit::manager::PluginManager;
+use plugkit::plugin::Plugin;
 use std::sync::Arc;
 
 # const EFFECT_PLUGIN_ID: &str = "sound_effects";
@@ -22,8 +22,8 @@ use std::sync::Arc;
 #     fn plugin_id(&self) -> &String {
 #         unimplemented!()
 #     }
-#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
 # }
 # impl SoundEffectPlugin {
 #     pub fn play(&self) {}
@@ -182,7 +182,7 @@ impl DatabaseExt for NoopDatabase {
 /// 在 Windows 上返回 "`plugins.dll`"。
 ///
 /// ```rust
-/// use dygpi::manager::make_platform_dylib_name;
+/// use plugkit::manager::make_platform_dylib_name;
 ///
 /// let dylib_name = make_platform_dylib_name("plugins".as_ref());
 /// ```
@@ -191,7 +191,7 @@ impl DatabaseExt for NoopDatabase {
 /// 因此，以下示例会用平台扩展名替换 "`foo`"。
 ///
 /// ```rust
-/// use dygpi::manager::make_platform_dylib_name;
+/// use plugkit::manager::make_platform_dylib_name;
 ///
 /// let dylib_name = make_platform_dylib_name("plugins/aplugin.foo".as_ref());
 /// ```
@@ -367,15 +367,15 @@ where
     /// # 示例
     ///
     /// ```rust
-    /// use dygpi::plugin::{Plugin, PluginRegistrar};
+    /// use plugkit::plugin::{Plugin, PluginRegistrar};
     /// # #[derive(Debug)]
     /// # struct SoundSourcePlugin;
     /// # impl Plugin for SoundSourcePlugin {
     /// #     fn plugin_id(&self) -> &String {
     /// #         unimplemented!()
     /// #     }
-    /// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+    /// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
     /// # }
     /// # impl SoundSourcePlugin {
     /// #     pub fn new(id: &str) -> Self { Self {} }
@@ -386,8 +386,8 @@ where
     /// #     fn plugin_id(&self) -> &String {
     /// #         unimplemented!()
     /// #     }
-    /// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_load(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
+    /// #     fn on_unload(&self, _db: &dyn plugkit::database::DatabaseExt) -> plugkit::error::Result<()> { Ok(()) }
     /// # }
     /// # impl SoundEffectPlugin {
     /// #     pub fn new(id: &str) -> Self { Self {} }

@@ -1,48 +1,100 @@
-# Crate dygpi
+# Crate plugkit
 
-Provides support for _Dynamic Generic PlugIns_, library based plugins for Rust.
+**Rust 通用插件管理框架** — 基于动态库加载，支持生命周期状态机、cron 调度、UI 嵌入与菜单聚合，可开箱即用地构建插件式宿主应用。
 
 ![MIT License](https://img.shields.io/badge/license-mit-118811.svg)
-![Minimum Rust Version](https://img.shields.io/badge/Min%20Rust-1.50-green.svg)
-[![crates.io](https://img.shields.io/crates/v/dygpi.svg)](https://crates.io/crates/dygpi)
-[![docs.rs](https://docs.rs/dygpi/badge.svg)](https://docs.rs/dygpi)
-![Build](https://github.com/johnstonskj/rust-dygpi/workflows/Rust/badge.svg)
-![Audit](https://github.com/johnstonskj/rust-dygpi/workflows/Security%20audit/badge.svg)
-[![GitHub stars](https://img.shields.io/github/stars/johnstonskj/rust-dygpi.svg)](https://github.com/johnstonskj/rust-dygpi/stargazers)
+![Minimum Rust Version](https://img.shields.io/badge/Min%20Rust-1.70-green.svg)
 
 -----
 
-# Example
+## 设计理念
 
-TBD
+`plugkit` 是一个**插件管理框架**，本身不做业务。它提供：
+
+### 核心能力（`plugkit`）
+
+| 模块 | 能力 |
+|------|------|
+| `plugin` | `Plugin` trait + 完整生命周期状态机（Loaded → Enabled → Running） |
+| `manager` | `PluginManager` — 动态库加载/卸载、依赖拓扑排序、状态转换 |
+| `database` | `DatabaseExt` + `SqliteDatabase` 实现，向插件安全暴露数据库 |
+| `metadata` | `PluginMetadata` — 声明式元信息（名称/版本/依赖/菜单/cron） |
+| `config` | `PluginManagerConfiguration` — 从配置文件初始化插件管理器 |
+| `error` | 统一错误类型（404/409/500 映射） |
+
+### 宿主能力（`plugkit::host`）
+
+| 功能 | 说明 |
+|------|------|
+| HTTP API | 开箱即用的 axum Router：库扫描/加载/卸载、插件 CRUD、状态机操作 |
+| cron 调度 | `start` 时自动注册 `tokio::spawn` 定时任务，`stop` 时注销 |
+| UI 托盘 | 从编译期嵌入的 `include_dir!` 内存服务插件 UI |
+| CORS | 默认 `permissive`，方便开发调试 |
+
+### 依赖
+
+`plugkit` 核心：
+
+- `libloading` — 动态库加载
+- `rusqlite` — SQLite 数据库
+- `search_path` — 库路径解析
+- `parking_lot` — 高效同步原语
+
+`plugkit::host` 额外：
+
+- `axum` + `tokio` — HTTP 服务器
+- `include_dir` — 编译期嵌入 UI 目录
+- `walkdir` — 扫描 dylib 文件
+- `mime_guess` — MIME 类型推断
+- `chrono` — 时间格式化
 
 -----
 
-## Changes
+## 快速开始
 
-**Version 0.1.5**
+```rust
+use plugkit::host::{host_router, HostApp, serve_frontend_handler};
+use plugkit::plugin::{Plugin, PluginManager};
+use std::sync::Arc;
 
-* Changed the PluginManager API to take Path and PathBuf values not strings for library names.
- 
-**Version 0.1.4**
+#[derive(Debug)] struct MyPlugin { id: String }
+impl Plugin for MyPlugin {
+    fn plugin_id(&self) -> &String { &self.id }
+}
 
-* Added public function to make dylib file names.
-* Reworked Github action and test cases for non-macos platforms.
+#[tokio::main]
+async fn main() {
+    let app = HostApp::<MyPlugin>::new();
+    let state = Arc::new(std::sync::RwLock::new(app));
+    let router = host_router::<MyPlugin>()
+        .fallback(serve_frontend_handler)
+        .with_state(state);
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, router).await.unwrap();
+}
+```
 
-**Version 0.1.3**
+## 完整示例
 
-* Moved the PluginRegistrar struct from the manager to plugin module; this seems cleaner from a client perspective.
+参见 [`examples/news/`](examples/news/) — 一个基于 `plugkit` 构建的新闻机构插件宿主：
 
-**Version 0.1.2**
+- `news_api` — 新闻插件 API crate（定义 `NewsAgencyPlugin`）
+- `news_server` — 新闻宿主（二进制），仅含发布业务，管理能力全部来自 `plugkit::host`
+- `plugins/afp_plugin` — 法新社插件（dylib，编译期嵌入 UI）
+- `plugins/reuters_plugin` — 路透社插件（dylib）
 
-* Added the ability to override the registration function name, this allows for multiple plugin types in a single host.
-* Fixed the E2E example, added a simple run script.
+```bash
+cd examples/news && make
+```
 
-**Version 0.1.1**
+-----
 
-* Internal change to use search_path crate for library resolution.
-* Added Github action config.
+## 版本
 
-**Version 0.1.0**
+**0.2.0** — 从 `dygpi` 升级为 `plugkit`，合并通用宿主能力。
 
-* Initial commit.
+-----
+
+## License
+
+MIT
