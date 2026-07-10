@@ -42,41 +42,22 @@ frontend: ## 构建通用前端 (frontend/dist/)
 	@echo "✓ built frontend/dist/ (touch src/host.rs 以触发重编)"
 
 # ---------- 示例 ----------
-run: frontend ## 启动通用插件管理后台（纯框架，无业务）— http://localhost:3000
-	@echo "==> 构建通用插件宿主..."
-	@cd examples/standalone && cargo build
-	@echo ""
-	@echo "╔══════════════════════════════════════════════════════════╗"
-	@echo "║  plugkit 通用插件管理后台启动中...                       ║"
-	@echo "║  后端 API:  http://localhost:3000/api                   ║"
-	@echo "║  前端 UI:   http://localhost:3000/                      ║"
-	@echo "╚══════════════════════════════════════════════════════════╝"
-	@echo ""
-	@cd examples/standalone && cargo run
-
-# ---------- 新闻示例 ----------
-run-news: frontend ## 构建并运行新闻插件示例 — http://localhost:3000
-	@echo "==> 构建新闻插件示例"
-	$(MAKE) -C examples/news build
-	@echo ""
-	@echo "╔══════════════════════════════════════════════════════════╗"
-	@echo "║  news_server 新闻示例启动中...                           ║"
-	@echo "║  后端 API:  http://localhost:3000/api                   ║"
-	@echo "║  前端 UI:  http://localhost:3000/                       ║"
-	@echo "╚══════════════════════════════════════════════════════════╝"
-	@echo ""
-	@cd examples/news && cargo run --manifest-path news_server/Cargo.toml
+run: frontend ## 编译并启动 plugkit 通用插件管理后台 — http://localhost:3000
+	@echo "==> 构建插件示例..."
+	$(MAKE) -C examples/news build 2>/dev/null || true
+	@echo "==> 启动 plugkit..."
+	@cargo run
 
 # ---------- debug ----------
 list: ## 列出项目结构
-	@echo "plugkit 框架:"
+	@echo "plugkit 框架 (lib + bin):"
 	@echo "  src/                — 框架核心 (lib)"
+	@echo "  src/main.rs         — 通用插件宿主入口 (bin)"
 	@echo "  frontend/           — 通用插件管理前端"
 	@echo ""
-	@echo "示例:"
-	@echo "  examples/standalone/ — 通用宿主演示（无业务）"
-	@echo "  examples/news/       — 新闻插件宿主演示"
+	@echo "独立插件示例 (examples/news/plugins/):"
+	@echo "  afp_plugin/         — 法新社插件（仅依赖 plugkit）"
+	@echo "  reuters_plugin/     — 路透社插件（仅依赖 plugkit）"
 	@echo ""
 	@echo "构建框架:     make"
-	@echo "运行通用宿主:  make run"
-	@echo "运行新闻示例:  make run-news"
+	@echo "运行:         make run"

@@ -5,7 +5,8 @@ plugkit 通用插件宿主 — 纯框架演示，无任何业务代码。
 二开者从此起步，补充自己的业务路由即可。
 */
 
-use plugkit::host::{host_router, HostApp, serve_frontend_handler};
+use plugkit::database::SqliteDatabase;
+use plugkit::host::{host_router, serve_frontend_handler, HostApp};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -14,7 +15,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter("plugkit=info")
         .init();
 
-    let app = HostApp::new();
+    let db = SqliteDatabase::in_memory()?;
+    let app = HostApp::new()
+        .with_database(Arc::new(db))
+        .with_plugin_search_dir("../news/plugins/afp_plugin/target/debug")
+        .with_plugin_search_dir("../news/plugins/reuters_plugin/target/debug");
     let state: plugkit::host::SharedState = Arc::new(std::sync::RwLock::new(app));
 
     let router = host_router()
@@ -26,9 +31,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╔══════════════════════════════════════════════════════════╗");
     println!("║  plugkit 通用插件管理后台已启动                          ║");
     println!("║  后端 API:  http://localhost:3000/api                   ║");
-    println!("║  前端 UI:  http://localhost:3000/                       ║");
+    println!("║  前端 UI:   http://localhost:3000/                      ║");
     println!("║                                                         ║");
-    println!("║  要查看新闻示例: cd examples/news && make run            ║");
+    println!("║  通过 /api/libraries 扫描并加载插件 dylib               ║");
     println!("╚══════════════════════════════════════════════════════════╝");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
