@@ -10,6 +10,7 @@
 /.cargo
 /target
 /docs
+/bin
 Cargo.lock
 **/*.rs.bk
 
@@ -25,15 +26,19 @@ frontend/dist/
 *.sqlite-shm
 *.sqlite-wal
 frontend/package-lock.json
-reuters_plugin/ui/node_modules/
-reuters_plugin/ui/dist/
-reuters_plugin/ui/package-lock.json
-afp_plugin/ui/node_modules/
-afp_plugin/ui/dist/
-afp_plugin/ui/package-lock.json
+
+# 任意插件的 UI 目录:node_modules / 构建产物 / 包锁 / vite/tsc 缓存
+# 不绑定具体插件名,新增插件到 plugins/<name>/ 也会自动适用
+**/plugins/*/ui/node_modules/
+**/plugins/*/ui/dist/
+**/plugins/*/ui/.vite/
+**/plugins/*/ui/*.tsbuildinfo
+**/plugins/*/ui/package-lock.json
+**/plugins/*/release/
 
 ## ------------------------------------------------------------------------------------------------
 # Plugin UI legacy compiled output (kept during migration; remove after first clean build)
-reuters_plugin/ui/panel.js
-afp_plugin/ui/panel.js
+**/plugins/*/ui/panel.js
 .playwright-cli/
+/plugins/afp_plugin/release/libafp_plugin.dylib
+/plugins/reuters_plugin/release/libreuters_plugin.dylib

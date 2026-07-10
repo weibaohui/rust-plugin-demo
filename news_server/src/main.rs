@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{Response, StatusCode},
+    http::{Request, Response, StatusCode},
     routing::{delete, get, post},
     Json, Router,
 };
@@ -9,6 +9,7 @@ use dygpi::database::{DatabaseExt, SqliteDatabase};
 use dygpi::error::ErrorKind;
 use dygpi::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
 use dygpi::plugin::{Plugin, PluginStatus};
+use include_dir::{include_dir, Dir};
 use news_api::{HostContext, NewsAgencyPlugin, PluginMenu};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -18,6 +19,13 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+
+// ------------------------------------------------------------------------------------------------
+// 编译期嵌入宿主前端 (frontend/dist/)
+// ------------------------------------------------------------------------------------------------
+// 由 `include_dir!` 宏在编译期把整个 `frontend/dist/` 目录打包进 news_server 的可执行文件中。
+// 运行时完全从内存服务,不需要也不应额外附带 frontend/dist/ 文件件。
+pub static FRONTEND_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../frontend/dist");
 
 // ------------------------------------------------------------------------------------------------
 // 状态：共享的插件管理器 + 元数据
@@ -227,6 +235,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/plugins", delete(unload_all_handler))
         // 插件前端 UI 静态文件
         .route("/plugin-files/*path", get(serve_plugin_ui_handler))
+        // 宿主前端 SPA + 静态资源 (从编译期嵌入的 FRONTEND_DIST 读)
+        // catch-all:优先级低于上面所有精确路由
+        .fallback(serve_frontend_handler)
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -235,8 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╔══════════════════════════════════════════════════════════╗");
     println!("║  新闻插件管理后台已启动                                  ║");
     println!("║  后端 API:  http://localhost:3000/api                   ║");
-    println!("║  启动前端:  cd frontend && npm run dev                  ║");
-    println!("║  前端地址:  http://localhost:5173                       ║");
+    println!("║  前端 UI:  http://localhost:3000/                       ║");
     println!("╚══════════════════════════════════════════════════════════╝");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -258,11 +268,13 @@ fn find_dylib_paths() -> Vec<PathBuf> {
         if let Ok(cwd) = std::env::current_dir() {
             dirs.push(cwd.join("target/debug"));
             dirs.push(cwd.join("target/release"));
+            // 发布布局: bin/plugin/<name>/*.dylib
+            dirs.push(cwd.join("bin/plugin"));
         }
-        // 从 exe 路径推断（开发时 target/debug/news_server）
+        // 从 exe 路径推断（开发时 target/debug/news_server；发布时 bin/news_server）
         if let Ok(exe) = std::env::current_exe() {
             if let Some(parent) = exe.parent() {
-                // parent = target/debug
+                // parent = target/debug 或 bin/
                 dirs.push(parent.to_path_buf());
                 if let Some(parent2) = parent.parent() {
                     // parent2 = target
@@ -271,6 +283,9 @@ fn find_dylib_paths() -> Vec<PathBuf> {
                     if let Some(project_root) = parent2.parent() {
                         dirs.push(project_root.join("target/debug"));
                         dirs.push(project_root.join("target/release"));
+                        // 发布布局
+                        dirs.push(project_root.join("bin/plugin"));
+                        dirs.push(parent.join("plugin"));
                     }
                 }
             }
@@ -283,7 +298,7 @@ fn find_dylib_paths() -> Vec<PathBuf> {
             continue;
         }
         for entry in walkdir::WalkDir::new(dir)
-            .max_depth(1)
+            .max_depth(3)
             .into_iter()
             .filter_map(|e| e.ok())
         {
@@ -758,7 +773,9 @@ async fn serve_plugin_ui_handler(
     }
 
     // 2) 落回到磁盘读
-    // 基于可执行文件路径推断项目根，避免 CWD 依赖
+    // 基于可执行文件路径推断其所在目录（如 bin/），plugin/ 与 ui/ 与 exe 同级。
+    // 例如 /plugin-files/afp_plugin/ui/dist/index.html →
+    //     {exe_dir}/plugin/afp_plugin/ui/dist/index.html
     let exe_path = std::env::current_exe().map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -767,25 +784,21 @@ async fn serve_plugin_ui_handler(
             }),
         )
     })?;
-    let project_root = exe_path
-        .parent() // debug/ 或 release/
-        .and_then(|p| p.parent()) // target/
-        .and_then(|p| p.parent()) // 项目根
-        .ok_or_else(|| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ApiMessage {
-                    message: "Cannot determine project root".to_string(),
-                }),
-            )
-        })?;
+    let exe_dir = exe_path.parent().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: "Cannot determine executable directory".to_string(),
+            }),
+        )
+    })?;
 
-    // 从项目根直接读取文件，例如 /plugin-files/reuters_plugin/ui/panel.js
-    // 对应 {project_root}/reuters_plugin/ui/panel.js
-    let file_path = project_root.join(&path);
+    // path 形如 "afp_plugin/ui/dist/index.html"，落在 bin/plugin/<base_dir> 下
+    let file_path = exe_dir.join("plugin").join(&path);
 
     // 防止路径穿越攻击
-    if !file_path.starts_with(&project_root) {
+    let plugin_root = exe_dir.join("plugin");
+    if !file_path.starts_with(&plugin_root) {
         return Err((
             StatusCode::FORBIDDEN,
             Json(ApiMessage {
@@ -824,4 +837,52 @@ async fn serve_plugin_ui_handler(
         .unwrap();
 
     Ok(response)
+}
+
+// ------------------------------------------------------------------------------------------------
+// 服务宿主前端 (从编译期嵌入的 FRONTEND_DIST 读)
+// ------------------------------------------------------------------------------------------------
+// catch-all `/<*path>`: 优先级低于精确的 /api/* 与 /plugin-files/*。
+// 1) 先尝试 dist/<path> (静态资源,例如 /assets/index-xxx.js)
+// 2) 找不到或 path 为 "/" 时回 dist/index.html (SPA fallback)
+// 3) 连 index.html 都没有 (前端未 build) 则返回内置提示页面,不 panic
+async fn serve_frontend_handler(req: Request<Body>) -> Response<Body> {
+    // 从 URI 提取 path,不去 query string,不自动 url-decode
+    let path = req.uri().path().trim_start_matches('/').to_string();
+
+    // 试按子路径查找文件
+    let tried = if path.is_empty() {
+        None
+    } else {
+        FRONTEND_DIST.get_file(&path)
+    };
+
+    // 命中静态资源,直接返回
+    if let Some(file) = tried {
+        let mime = mime_guess::from_path(file.path())
+            .first_or_octet_stream()
+            .to_string();
+        return Response::builder()
+            .header("Content-Type", mime)
+            .body(Body::from(file.contents().to_vec()))
+            .unwrap();
+    }
+
+    // 未命中 → SPA fallback 到 index.html
+    if let Some(index) = FRONTEND_DIST.get_file("index.html") {
+        return Response::builder()
+            .header("Content-Type", "text/html; charset=utf-8")
+            .body(Body::from(index.contents().to_vec()))
+            .unwrap();
+    }
+
+    // 连 index.html 都没有 (前端未 build):返回提示 HTML
+    let body = b"<!doctype html><html><body style=\"font-family:sans-serif;padding:2rem\">\
+        <h1>news_server</h1>\
+        <p>Frontend not embedded. Run <code>make ui-frontend</code> then rebuild the server.</p>\
+        </body></html>";
+    Response::builder()
+        .header("Content-Type", "text/html; charset=utf-8")
+        .body(Body::from(body.to_vec()))
+        .unwrap()
 }

@@ -13,9 +13,9 @@ publish = true
 [workspace]
 members = [
     "news_api",
-    "reuters_plugin",
-    "afp_plugin",
     "news_server",
+    "plugins/afp_plugin",
+    "plugins/reuters_plugin",
 ]
 
 [features]

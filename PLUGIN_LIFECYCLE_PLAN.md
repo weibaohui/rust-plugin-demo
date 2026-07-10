@@ -64,7 +64,7 @@ pub struct CronSpec { pub name: String, pub interval_secs: u64 }
 - `src/plugin.rs`(Plugin trait + CronSpec + PluginStatus)
 - `src/manager.rs`(PluginManager 状态机 + enable/start/stop/disable + LoadedPlugin.status)
 - `news_api/src/lib.rs`(继承默认钩子)
-- `afp_plugin/src/lib.rs` + `reuters_plugin/src/lib.rs`(演示钩子 + cron_specs)
+- `plugins/afp_plugin/src/lib.rs` + `plugins/reuters_plugin/src/lib.rs`(演示钩子 + cron_specs)
 - `news_server/src/main.rs`(API + cron 调度 + 菜单可见性 + AppContext cron handles)
 - `frontend/src/api.ts`(status + 操作 API)
 - `frontend/src/components/PluginList.tsx`(状态徽标 + 按钮)
