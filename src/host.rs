@@ -270,33 +270,7 @@ pub fn plugin_err_to_response(
 pub fn find_dylib_paths(extra_dirs: &[std::path::PathBuf]) -> Vec<PathBuf> {
     let mut results = Vec::new();
 
-    let project_dirs: Vec<PathBuf> = {
-        let mut dirs = Vec::new();
-        if let Ok(cwd) = std::env::current_dir() {
-            dirs.push(cwd.join("target/debug"));
-            dirs.push(cwd.join("target/release"));
-            dirs.push(cwd.join("bin/plugin"));
-        }
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(parent) = exe.parent() {
-                dirs.push(parent.to_path_buf());
-                if let Some(parent2) = parent.parent() {
-                    dirs.push(parent2.join("release"));
-                    if let Some(project_root) = parent2.parent() {
-                        dirs.push(project_root.join("target/debug"));
-                        dirs.push(project_root.join("target/release"));
-                        dirs.push(project_root.join("bin/plugin"));
-                        dirs.push(parent.join("plugin"));
-                    }
-                }
-            }
-        }
-        // 宿主通过 `HostApp::with_plugin_search_dir` 注入的搜索目录。
-        dirs.extend(extra_dirs.iter().cloned());
-        dirs
-    };
-
-    for dir in &project_dirs {
+    for dir in extra_dirs {
         if !dir.exists() {
             continue;
         }
