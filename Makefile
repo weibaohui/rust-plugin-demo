@@ -11,7 +11,7 @@ REPO_ROOT      := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 # ---------- 主目标 ----------
 .PHONY: all build check test clean help
 
-all: build ## 默认: cargo build
+all: frontend build ## 默认: 构建前端 + cargo build
 
 help: ## 列出所有可用目标
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make \033[36m<target>\033[0m\n\nTargets:\n"} \
@@ -28,6 +28,17 @@ test: ## cargo test
 
 clean: ## cargo clean
 	cargo clean
+
+frontend: ## 构建通用前端 (frontend/dist/)
+	@if [ ! -d frontend/node_modules ]; then \
+		echo "==> frontend: npm install"; \
+		(cd frontend && npm install); \
+	fi
+	@echo "==> frontend: npm run build"
+	@(cd frontend && npm run build)
+	# 强制 cargo 重新编译 plugkit (include_dir! 静态嵌入)
+	@touch src/host.rs
+	@echo "✓ built frontend/dist/ (touch src/host.rs 以触发重编)"
 
 # ---------- 示例构建 ----------
 .PHONY: example-news

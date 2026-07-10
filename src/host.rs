@@ -47,7 +47,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use include_dir::Dir;
+use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -766,56 +766,48 @@ pub async fn handle_serve_plugin_ui<T: Plugin + Send + Sync + 'static>(
 // 服务宿主前端 SPA
 // ------------------------------------------------------------------------------------------------
 
-/// 服务宿主前端 SPA（从编译期嵌入的 `FRONTEND_DIST` 读）。
+/// 编译期嵌入的通用插件管理前端。
+pub static FRONTEND_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/frontend/dist");
+
+/// 服务宿主前端 SPA（从编译期嵌入的 [`FRONTEND_DIST`] 读）。
 ///
 /// 这是一个 catch-all fallback handler：
-/// 1. 先尝试 `dist/<path>`（静态资源）
+/// 1. 先尝试 `dist/<path>`（静态资源，如 JS/CSS/HTML 等）
 /// 2. 找不到时回退到 `dist/index.html`（SPA fallback）
 /// 3. 连 index.html 都没有则返回内置提示页面
-///
-/// 使用前需在宿主二进制中声明 `static FRONTEND_DIST`：
-///
-/// ```rust,ignore
-/// use include_dir::{include_dir, Dir};
-/// pub static FRONTEND_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../frontend/dist");
-/// ```
-/// 一个占位 fallback handler，返回提示页面。
-///
-/// 宿主应定义自己的 `static FRONTEND_DIST` 并用它包装一个 SPA fallback handler：
-///
-/// ```rust,ignore
-/// use include_dir::{include_dir, Dir};
-/// pub static FRONTEND_DIST: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../frontend/dist");
-///
-/// async fn frontend_fallback(req: Request<Body>) -> Response<Body> {
-///     let path = req.uri().path().trim_start_matches('/');
-///     if !path.is_empty() {
-///         if let Some(file) = FRONTEND_DIST.get_file(path) {
-///             let mime = mime_guess::from_path(file.path()).first_or_octet_stream().to_string();
-///             return Response::builder()
-///                 .header("Content-Type", mime)
-///                 .body(Body::from(file.contents().to_vec()))
-///                 .unwrap();
-///         }
-///     }
-///     if let Some(index) = FRONTEND_DIST.get_file("index.html") {
-///         return Response::builder()
-///             .header("Content-Type", "text/html; charset=utf-8")
-///             .body(Body::from(index.contents().to_vec()))
-///             .unwrap();
-///     }
-///     Response::builder()
-///         .status(StatusCode::NOT_FOUND)
-///         .body(Body::from("Frontend not built"))
-///         .unwrap()
-/// }
-/// ```
-pub async fn serve_frontend_handler(_req: Request<Body>) -> Response<Body> {
-    // 占位：用户应定义自己的 static FRONTEND_DIST 并实现 SPA fallback。
-    // 参考上面的 doc 示例。
+pub async fn serve_frontend_handler(req: Request<Body>) -> Response<Body> {
+    let path = req.uri().path().trim_start_matches('/').to_string();
+
+    // 试按子路径查找文件
+    let tried = if path.is_empty() {
+        None
+    } else {
+        FRONTEND_DIST.get_file(&path)
+    };
+
+    // 命中静态资源,直接返回
+    if let Some(file) = tried {
+        let mime = mime_guess::from_path(file.path())
+            .first_or_octet_stream()
+            .to_string();
+        return Response::builder()
+            .header("Content-Type", mime)
+            .body(Body::from(file.contents().to_vec()))
+            .unwrap();
+    }
+
+    // 未命中 → SPA fallback 到 index.html
+    if let Some(index) = FRONTEND_DIST.get_file("index.html") {
+        return Response::builder()
+            .header("Content-Type", "text/html; charset=utf-8")
+            .body(Body::from(index.contents().to_vec()))
+            .unwrap();
+    }
+
+    // 连 index.html 都没有 (前端未 build):返回提示 HTML
     let body = b"<!doctype html><html><body style=\"font-family:sans-serif;padding:2rem\">\
         <h1>plugkit</h1>\
-        <p>Frontend not configured. Define a <code>static FRONTEND_DIST</code> and create a custom fallback handler.</p>\
+        <p>Frontend not embedded. Run <code>make frontend</code> then rebuild.</p>\
         </body></html>";
     Response::builder()
         .header("Content-Type", "text/html; charset=utf-8")
