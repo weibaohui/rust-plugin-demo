@@ -22,8 +22,8 @@ use std::sync::Arc;
 #     fn plugin_id(&self) -> &String {
 #         unimplemented!()
 #     }
-#     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-#     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+#     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
 # }
 # impl SoundEffectPlugin {
 #     pub fn play(&self) {}
@@ -45,7 +45,9 @@ plugin.play();
 
 */
 
+use crate::database::DatabaseExt;
 use crate::error::{Error, ErrorKind, Result};
+use crate::metadata::PluginMetadata;
 use crate::plugin::{
     compatibility_hash, CompatibilityFn, CronSpec, Plugin, PluginRegistrar, PluginRegistrationFn,
     PluginStatus, COMPATIBILITY_FN_NAME, PLUGIN_REGISTRATION_FN_NAME,
@@ -65,6 +67,12 @@ use std::sync::{Arc, RwLock};
 ///
 /// 插件管理器负责从动态库加载和卸载插件，根据需要动态打开和关闭库。
 ///
+/// # 与宿主数据库集成
+///
+/// 宿主通过 [`PluginManager::with_database`] 或 [`PluginManager::set_database`] 注入
+/// 一个 [`DatabaseExt`] 实现,管理器在调用生命周期钩子时将其传递给插件,
+/// 插件据此进行表的创建、初始化、卸载清理。
+///
 #[derive(Debug)]
 pub struct PluginManager<T>
 where
@@ -73,6 +81,9 @@ where
     search_path: SearchPath,
     registration_fn_name: Vec<u8>,
     plugins: RwLock<HashMap<String, LoadedPlugin<T>>>,
+    /// 宿主注入的数据库操作接口,生命周期钩子调用时传递给插件。
+    /// `None` 时钩子收到一个 no-op 的占位实现(便于无 DB 的简单用例)。
+    database: Option<Arc<dyn DatabaseExt>>,
 }
 
 #[cfg(target_os = "macos")]
@@ -113,6 +124,48 @@ where
 struct LoadedLibrary {
     file_name: PathBuf,
     library: Library,
+}
+
+///
+/// 当宿主未注入数据库时使用的占位实现——所有方法返回错误或空,便于无 DB 的简单用例。
+///
+#[derive(Debug)]
+struct NoopDatabase;
+
+impl DatabaseExt for NoopDatabase {
+    fn execute(&self, _sql: &str) -> Result<usize> {
+        Err(Error::from(ErrorKind::DatabaseError(
+            "no database configured".to_string(),
+        )))
+    }
+    fn execute_with(&self, _sql: &str, _params: &[crate::database::DbValue]) -> Result<usize> {
+        Err(Error::from(ErrorKind::DatabaseError(
+            "no database configured".to_string(),
+        )))
+    }
+    fn query(&self, _sql: &str) -> Result<Vec<Vec<crate::database::DbValue>>> {
+        Err(Error::from(ErrorKind::DatabaseError(
+            "no database configured".to_string(),
+        )))
+    }
+    fn query_with(
+        &self,
+        _sql: &str,
+        _params: &[crate::database::DbValue],
+    ) -> Result<Vec<Vec<crate::database::DbValue>>> {
+        Err(Error::from(ErrorKind::DatabaseError(
+            "no database configured".to_string(),
+        )))
+    }
+    fn has_table(&self, _table: &str) -> Result<bool> {
+        Ok(false)
+    }
+    fn drop_table(&self, _table: &str) -> Result<()> {
+        Ok(())
+    }
+    fn describe(&self) -> String {
+        "noop://no-database".to_string()
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -178,6 +231,7 @@ where
             search_path: Default::default(),
             registration_fn_name: PLUGIN_REGISTRATION_FN_NAME.to_vec(),
             plugins: Default::default(),
+            database: None,
         }
     }
 }
@@ -188,7 +242,7 @@ where
 {
     fn drop(&mut self) {
         info!("PluginManager::drop()");
-        self.unload_all().unwrap();
+        self.unload_all(true).unwrap();
     }
 }
 
@@ -204,7 +258,40 @@ where
             search_path,
             registration_fn_name: PLUGIN_REGISTRATION_FN_NAME.to_vec(),
             plugins: Default::default(),
+            database: None,
         }
+    }
+
+    ///
+    /// 绑定宿主数据库操作接口(builder 风格,可链式)。
+    ///
+    /// 生命周期钩子调用时,管理器会把此接口传递给插件,插件据此读写数据库。
+    /// 未注入时,钩子收到一个 no-op 的占位实现。
+    ///
+    pub fn with_database(mut self, db: Arc<dyn DatabaseExt>) -> Self {
+        self.database = Some(db);
+        self
+    }
+
+    ///
+    /// 设置宿主数据库操作接口(运行期替换)。
+    ///
+    pub fn set_database(&mut self, db: Arc<dyn DatabaseExt>) {
+        self.database = Some(db);
+    }
+
+    ///
+    /// 返回宿主注入的数据库操作接口(若存在)。
+    ///
+    pub fn database(&self) -> Option<Arc<dyn DatabaseExt>> {
+        self.database.clone()
+    }
+
+    /// 返回一个可用于生命周期调用的数据库句柄——未注入时返回 no-op 占位实现。
+    fn db_or_noop(&self) -> Arc<dyn DatabaseExt> {
+        self.database
+            .clone()
+            .unwrap_or_else(|| Arc::new(NoopDatabase) as Arc<dyn DatabaseExt>)
     }
 
     ///
@@ -287,8 +374,8 @@ where
     /// #     fn plugin_id(&self) -> &String {
     /// #         unimplemented!()
     /// #     }
-    /// #     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
     /// # }
     /// # impl SoundSourcePlugin {
     /// #     pub fn new(id: &str) -> Self { Self {} }
@@ -299,8 +386,8 @@ where
     /// #     fn plugin_id(&self) -> &String {
     /// #         unimplemented!()
     /// #     }
-    /// #     fn on_load(&self) -> dygpi::error::Result<()> { Ok(()) }
-    /// #     fn on_unload(&self) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_load(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
+    /// #     fn on_unload(&self, _db: &dyn dygpi::database::DatabaseExt) -> dygpi::error::Result<()> { Ok(()) }
     /// # }
     /// # impl SoundEffectPlugin {
     /// #     pub fn new(id: &str) -> Self { Self {} }
@@ -362,14 +449,16 @@ where
     ///
     /// 卸载当前在此插件管理器中注册的所有插件及相关库。
     ///
-    pub fn unload_all(&mut self) -> Result<()> {
-        info!("PluginManager::unload_all()");
+    /// `keep_data` 语义同 [`unload_plugin`]。
+    ///
+    pub fn unload_all(&mut self, keep_data: bool) -> Result<()> {
+        info!("PluginManager::unload_all(keep_data={})", keep_data);
         let plugin_names: Vec<String> = {
             let plugins = self.plugins.write().unwrap();
             plugins.iter().map(|(n, _)| n).cloned().collect()
         };
         for name in plugin_names {
-            self.unload_plugin(&name)?;
+            self.unload_plugin(&name, keep_data)?;
         }
         Ok(())
     }
@@ -378,8 +467,15 @@ where
     /// 卸载由给定插件标识符标识的插件（如果存在）。注意，
     /// 如果没有其他插件使用该插件库，此方法也会关闭该库。
     ///
-    pub fn unload_plugin(&mut self, plugin_name: &str) -> Result<()> {
-        info!("PluginManager::unload_plugin({:?})", plugin_name);
+    /// `keep_data` 为 `true` 时,`on_uninstall` 收到 `keep_data=true`,插件保留数据;
+    /// 为 `false` 时删除表与数据。
+    ///
+    pub fn unload_plugin(&mut self, plugin_name: &str, keep_data: bool) -> Result<()> {
+        info!(
+            "PluginManager::unload_plugin({:?}, keep_data={})",
+            plugin_name, keep_data
+        );
+        let db = self.db_or_noop();
         let mut plugins = self.plugins.write().unwrap();
         if let Some(plugin) = plugins.remove(plugin_name) {
             // 收敛:Running 先 stop,Enabled 先 disable
@@ -393,9 +489,9 @@ where
                 PluginStatus::Loaded => {}
             }
             trace!("PluginManager::unload_plugin() > calling plugin `on_uninstall`");
-            plugin.plugin.on_uninstall()?;
+            plugin.plugin.on_uninstall(&*db, keep_data)?;
             trace!("PluginManager::unload_plugin() > calling plugin `on_unload`");
-            plugin.plugin.on_unload()?;
+            plugin.plugin.on_unload(&*db)?;
             if Arc::strong_count(&plugin.in_library) == 1 {
                 trace!("PluginManager::unload_plugin() > closing library");
                 let in_library = Arc::try_unwrap(plugin.in_library).unwrap();
@@ -418,10 +514,15 @@ where
 
     /// 启用插件:`Loaded → Enabled`,调用 `on_enable`。
     /// 插件不存在返回 `PluginNotFound`;状态非 Loaded 返回 `InvalidPluginState`。
+    /// **依赖检测**:启用前检查 `metadata().dependencies()` 中所有依赖插件均已处于
+    /// Enabled/Running 状态,未满足返回 `DependencyUnmet`。
+    ///
+    /// 依赖检测与状态变更在同一写锁下完成,避免 TOCTOU 竞态。
     pub fn enable_plugin(&mut self, plugin_id: &str) -> Result<()> {
         let mut plugins = self.plugins.write().unwrap();
+        // 状态检查
         let plugin = plugins
-            .get_mut(plugin_id)
+            .get(plugin_id)
             .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         if plugin.status != PluginStatus::Loaded {
             return Err(ErrorKind::InvalidPluginState(format!(
@@ -430,6 +531,35 @@ where
             ))
             .into());
         }
+        // 依赖检测:按 metadata.name 查找,要求其状态为 Enabled/Running
+        let meta = plugin.plugin.metadata();
+        for dep in meta.dependencies() {
+            let dep_status = plugins
+                .values()
+                .find(|p| p.plugin.metadata().name == *dep)
+                .map(|p| p.status);
+            match dep_status {
+                Some(s) if matches!(s, PluginStatus::Enabled | PluginStatus::Running) => {}
+                Some(s) => {
+                    return Err(ErrorKind::DependencyUnmet(format!(
+                        "cannot enable '{}': dependency '{}' current {:?}, expected Enabled/Running",
+                        plugin_id, dep, s
+                    ))
+                    .into());
+                }
+                None => {
+                    return Err(ErrorKind::DependencyUnmet(format!(
+                        "cannot enable '{}': dependency '{}' not registered",
+                        plugin_id, dep
+                    ))
+                    .into());
+                }
+            }
+        }
+        // 状态变更(同一写锁)
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         plugin.plugin.on_enable()?;
         plugin.status = PluginStatus::Enabled;
         Ok(())
@@ -437,10 +567,16 @@ where
 
     /// 禁用插件:`Enabled → Loaded`,调用 `on_disable`。
     /// 插件不存在返回 `PluginNotFound`;状态非 Enabled 返回 `InvalidPluginState`。
+    /// **反向依赖检测**:禁用前检查没有其他 Enabled/Running 插件依赖当前插件,
+    /// 否则返回 `DependencyUnmet`。
+    ///
+    /// 反向依赖检测与状态变更在同一写锁下完成,避免 TOCTOU �竞态。
+    /// 自跳与依赖匹配统一以 `metadata().name` 为标识,避免 registry id 与
+    /// metadata name 混淆导致的误判。
     pub fn disable_plugin(&mut self, plugin_id: &str) -> Result<()> {
         let mut plugins = self.plugins.write().unwrap();
         let plugin = plugins
-            .get_mut(plugin_id)
+            .get(plugin_id)
             .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         if plugin.status != PluginStatus::Enabled {
             return Err(ErrorKind::InvalidPluginState(format!(
@@ -449,6 +585,29 @@ where
             ))
             .into());
         }
+        let my_name = plugin.plugin.metadata().name.clone();
+        // 反向依赖检测:以 metadata.name 为一致标识,自跳也用 metadata.name
+        for other in plugins.values() {
+            if other.plugin.metadata().name == my_name {
+                continue;
+            }
+            if !matches!(other.status, PluginStatus::Enabled | PluginStatus::Running) {
+                continue;
+            }
+            let other_meta = other.plugin.metadata();
+            if other_meta.dependencies().iter().any(|d| *d == my_name) {
+                return Err(ErrorKind::DependencyUnmet(format!(
+                    "cannot disable '{}': plugin '{}' depends on it",
+                    plugin_id,
+                    other.plugin.plugin_id()
+                ))
+                .into());
+            }
+        }
+        // 状态变更
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         plugin.plugin.on_disable()?;
         plugin.status = PluginStatus::Loaded;
         Ok(())
@@ -456,6 +615,7 @@ where
 
     /// 启动插件:`Enabled → Running`,调用 `on_start`,返回 `cron_specs` 供宿主调度。
     /// 插件不存在返回 `PluginNotFound`;状态非 Enabled 返回 `InvalidPluginState`。
+    /// 返回的 `cron_specs` 优先取自 `metadata().crons()`,其次 `cron_specs()` 方法。
     pub fn start_plugin(&mut self, plugin_id: &str) -> Result<Vec<CronSpec>> {
         let mut plugins = self.plugins.write().unwrap();
         let plugin = plugins
@@ -470,7 +630,13 @@ where
         }
         plugin.plugin.on_start()?;
         plugin.status = PluginStatus::Running;
-        Ok(plugin.plugin.cron_specs())
+        // 优先使用 metadata 声明的 crons
+        let meta_crons = plugin.plugin.metadata().crons().to_vec();
+        if !meta_crons.is_empty() {
+            Ok(meta_crons)
+        } else {
+            Ok(plugin.plugin.cron_specs())
+        }
     }
 
     /// 停止插件:`Running → Enabled`,调用 `on_stop`。
@@ -496,6 +662,120 @@ where
     pub fn plugin_status(&self, plugin_id: &str) -> Option<PluginStatus> {
         let plugins = self.plugins.read().unwrap();
         plugins.get(plugin_id).map(|p| p.status)
+    }
+
+    ///
+    /// 返回插件的元信息(若存在)。宿主据此进行发现、显示、依赖检测、启动顺序排序。
+    ///
+    pub fn plugin_metadata(&self, plugin_id: &str) -> Option<PluginMetadata> {
+        let plugins = self.plugins.read().unwrap();
+        plugins.get(plugin_id).map(|p| p.plugin.metadata())
+    }
+
+    ///
+    /// 聚合所有处于 Enabled/Running 状态插件的菜单树,供前端 Sidebar 渲染。
+    ///
+    pub fn aggregate_menus(&self) -> Vec<crate::metadata::PluginMenu> {
+        let plugins = self.plugins.read().unwrap();
+        let mut menus = Vec::new();
+        for p in plugins.values() {
+            if matches!(p.status, PluginStatus::Enabled | PluginStatus::Running) {
+                menus.extend(p.plugin.metadata().menus().to_vec());
+            }
+        }
+        // 按 order 排序
+        menus.sort_by_key(|m| m.order);
+        menus
+    }
+
+    ///
+    /// 对已启用插件进行拓扑排序,确保依赖与 `run_after` 先启动。
+    ///
+    /// �法:Kahn 拓扑排序。仅纳入 Enabled/Running 状态的插件;
+    /// `dependencies` 与 `run_after` 均作为入度约束。
+    /// 检测到循环依赖时返回 `CircularDependency`。
+    ///
+    pub fn topological_sort(&self) -> Result<Vec<String>> {
+        let plugins = self.plugins.read().unwrap();
+
+        // 收集所有 Enabled/Running 插件名(按 metadata.name)
+        let mut enabled_names: Vec<String> = Vec::new();
+        for p in plugins.values() {
+            if matches!(p.status, PluginStatus::Enabled | PluginStatus::Running) {
+                let name = p.plugin.metadata().name.clone();
+                if !enabled_names.contains(&name) {
+                    enabled_names.push(name);
+                }
+            }
+        }
+
+        // 构建入度表与反向邻接表(以 metadata.name 为顶点)
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        for name in &enabled_names {
+            in_degree.insert(name.clone(), 0);
+        }
+        for p in plugins.values() {
+            if !matches!(p.status, PluginStatus::Enabled | PluginStatus::Running) {
+                continue;
+            }
+            let my_name = p.plugin.metadata().name.clone();
+            // dependencies 与 run_after 均作为入度约束
+            let preds: Vec<String> = p
+                .plugin
+                .metadata()
+                .dependencies()
+                .iter()
+                .chain(p.plugin.metadata().run_after().iter())
+                .filter(|dep| {
+                    // 仅处理已启用的依赖
+                    plugins.values().any(|o| {
+                        matches!(o.status, PluginStatus::Enabled | PluginStatus::Running)
+                            && o.plugin.metadata().name == **dep
+                    })
+                })
+                .cloned()
+                .collect();
+            for dep in preds {
+                graph.entry(dep).or_default().push(my_name.clone());
+                *in_degree.entry(my_name.clone()).or_insert(0) += 1;
+            }
+        }
+
+        // Kahn 算法
+        let mut queue: Vec<String> = in_degree
+            .iter()
+            .filter(|(_, d)| **d == 0)
+            .map(|(k, _)| k.clone())
+            .collect();
+        queue.sort(); // 稳定排序
+        let mut result: Vec<String> = Vec::new();
+        while let Some(current) = queue.first().cloned() {
+            queue.remove(0);
+            result.push(current.clone());
+            if let Some(depends) = graph.get(&current) {
+                for dep in depends {
+                    if let Some(d) = in_degree.get_mut(dep) {
+                        *d -= 1;
+                        if *d == 0 {
+                            queue.push(dep.clone());
+                            queue.sort();
+                        }
+                    }
+                }
+            }
+        }
+
+        if result.len() != enabled_names.len() {
+            // 检测到循环依赖,收集未排序的插件
+            let remaining: Vec<String> = enabled_names
+                .iter()
+                .filter(|n| !result.contains(n))
+                .cloned()
+                .collect();
+            return Err(ErrorKind::CircularDependency(remaining.join(", ")).into());
+        }
+        Ok(result)
     }
 
     // --------------------------------------------------------------------------------------------
@@ -569,14 +849,17 @@ where
 
         let from_library = Arc::new(from_library);
 
+        // 获取数据库句柄(未注入时为 no-op 占位)
+        let db = self.db_or_noop();
+
         for plugin in registrar
             .plugins()
             .map_err(|e| Error::from(ErrorKind::PluginRegistration(e)))?
         {
             info!("PluginManager::register_plugins() > calling plugin `on_load`");
-            plugin.on_load()?;
+            plugin.on_load(&*db)?;
             info!("PluginManager::register_plugins() > calling plugin `on_install`");
-            plugin.on_install()?;
+            plugin.on_install(&*db)?;
             if let Some(_) = registry.insert(
                 plugin.plugin_id().to_string(),
                 LoadedPlugin {
@@ -648,5 +931,148 @@ mod tests {
             mgr.stop_plugin("missing").unwrap_err().kind(),
             ErrorKind::PluginNotFound(_)
         ));
+    }
+
+    /// 演示 metadata + 依赖检测 + 拿包排序 + 数据库 keep_data 卸载。
+    #[test]
+    fn test_metadata_dependency_topo_database() {
+        use crate::database::SqliteDatabase;
+        use crate::metadata::PluginMetadata;
+
+        // 依赖关系:B 依赖 A,C run_after A;拓扑排序应得到 A 在 B/C 前。
+        #[derive(Debug)]
+        struct DepPlugin {
+            id: String,
+            meta: PluginMetadata,
+        }
+        impl Plugin for DepPlugin {
+            fn plugin_id(&self) -> &String {
+                &self.id
+            }
+            fn metadata(&self) -> PluginMetadata {
+                self.meta.clone()
+            }
+            fn on_install(&self, db: &dyn crate::database::DatabaseExt) -> Result<()> {
+                for t in self.meta.tables() {
+                    db.validate_table_name(t)?;
+                    db.execute(&format!(
+                        "CREATE TABLE IF NOT EXISTS {} (id INTEGER PRIMARY KEY)",
+                        t
+                    ))?;
+                }
+                Ok(())
+            }
+            fn on_uninstall(
+                &self,
+                db: &dyn crate::database::DatabaseExt,
+                keep_data: bool,
+            ) -> Result<()> {
+                if !keep_data {
+                    for t in self.meta.tables() {
+                        db.drop_table(t)?;
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        let db = SqliteDatabase::in_memory().unwrap();
+        let mut mgr: PluginManager<DepPlugin> =
+            PluginManager::default().with_database(std::sync::Arc::new(db));
+
+        // 注册三个插件(A、B、C),B 依赖 A,C run_after A。
+        // 直接构造 LoadedPlugin,绕过动态库加载(测试专用)。
+        {
+            let mut registry = mgr.plugins.write().unwrap();
+            let make = |name: &str, deps: &[&str], run_after: &[&str], tables: &[&str]| {
+                let meta = PluginMetadata::new(name, name, "1.0.0")
+                    .with_dependencies(deps)
+                    .with_run_after(run_after)
+                    .with_tables(tables);
+                DepPlugin {
+                    id: name.to_string(),
+                    meta,
+                }
+            };
+            let in_library = Arc::new(LoadedLibrary {
+                file_name: PathBuf::from("test"),
+                library: unsafe {
+                    // 占位库——仅用于 strong_count,不会被实际关闭
+                    // 使用当前可执行文件作为库(安全,self-load)
+                    let exe = std::env::current_exe().unwrap();
+                    libloading::Library::new(&exe).unwrap()
+                },
+            });
+            for p in [
+                make("A", &[], &[], &["a_items"]),
+                make("B", &["A"], &[], &["b_items"]),
+                make("C", &[], &["A"], &["c_items"]),
+            ] {
+                registry.insert(
+                    p.id.clone(),
+                    LoadedPlugin {
+                        plugin: Arc::new(p),
+                        in_library: in_library.clone(),
+                        status: PluginStatus::Loaded,
+                    },
+                );
+            }
+        }
+
+        // 安装阶段:on_install 通过 db 建表
+        assert!(mgr.is_empty() == false);
+        // 启用 A(无依赖,应成功)
+        mgr.enable_plugin("A").unwrap();
+        // 启用 B(依赖 A 已 Enabled,应成功)
+        mgr.enable_plugin("B").unwrap();
+        // 启用 C(run_after A,不要求 A 已启用?run_after 仅约束启动顺序,启用不限)
+        mgr.enable_plugin("C").unwrap();
+
+        // 拿包排序:A 应在 B、C 前
+        let order = mgr.topological_sort().unwrap();
+        let pos_a = order.iter().position(|n| n == "A").unwrap();
+        let pos_b = order.iter().position(|n| n == "B").unwrap();
+        let pos_c = order.iter().position(|n| n == "C").unwrap();
+        assert!(pos_a < pos_b, "A should start before B (dependency)");
+        assert!(pos_a < pos_c, "A should start before C (run_after)");
+
+        // 禁用 B 前:应不能禁用 A(被 B 依赖)
+        let err = mgr.disable_plugin("A").unwrap_err();
+        assert!(matches!(err.kind(), ErrorKind::DependencyUnmet(_)));
+        // 先禁用 B,再禁用 A,应成功
+        mgr.disable_plugin("B").unwrap();
+        mgr.disable_plugin("A").unwrap();
+
+        // metadata 查询
+        let meta_a = mgr.plugin_metadata("A").unwrap();
+        assert_eq!(meta_a.name, "A");
+        assert_eq!(meta_a.tables(), &["a_items".to_string()]);
+
+        // 显式调用 on_install 建表(测试绕过了 load_plugins_from,故手动建表)
+        let db_for_install = mgr.database().unwrap();
+        for (id, _) in ["A", "B", "C"].iter().zip(0..3) {
+            let p = mgr.get(id).unwrap();
+            p.on_install(&*db_for_install).unwrap();
+        }
+        // 校验表已建
+        assert!(db_for_install.has_table("a_items").unwrap());
+        assert!(db_for_install.has_table("b_items").unwrap());
+
+        // 卸载 B(keep_data=false):应 drop b_items
+        mgr.unload_plugin("B", false).unwrap();
+        // 卸载 A(keep_data=true):应保留 a_items
+        mgr.unload_plugin("A", true).unwrap();
+
+        // 校验数据库:b_items 应已删除,a_items 应保留。
+        // 使用 mgr 实际持有的数据库句柄(而非新建 in_memory)。
+        let db = mgr.database().unwrap();
+        assert!(
+            !db.has_table("b_items").unwrap(),
+            "b_items should be dropped (keep_data=false)"
+        );
+        assert!(
+            db.has_table("a_items").unwrap(),
+            "a_items should be preserved (keep_data=true)"
+        );
     }
 }

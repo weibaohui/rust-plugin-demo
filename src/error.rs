@@ -50,6 +50,15 @@ pub enum ErrorKind {
     /// 插件状态不符合操作要求(如非 Loaded 时 enable)。参数为说明。
     ///
     InvalidPluginState(String),
+    /// 数据库操作失败。参数为说明(含底层错误信息)。
+    ///
+    DatabaseError(String),
+    /// 插件依赖未满足(启用前依赖未启用,或禁用前被其他插件依赖)。参数为说明。
+    ///
+    DependencyUnmet(String),
+    /// 检测到循环依赖,无法进行拓扑排序。参数为参与循环的插件名列表。
+    ///
+    CircularDependency(String),
 }
 
 ///
@@ -89,6 +98,9 @@ impl Display for ErrorKind {
                     format!("No Configured plugins for type '{}'", plugin_type),
                 ErrorKind::PluginNotFound(id) => format!("Plugin '{}' not found", id),
                 ErrorKind::InvalidPluginState(msg) => format!("Invalid plugin state: {}", msg),
+                ErrorKind::DatabaseError(msg) => format!("Database error: {}", msg),
+                ErrorKind::DependencyUnmet(msg) => format!("Dependency unmet: {}", msg),
+                ErrorKind::CircularDependency(msg) => format!("Circular dependency: {}", msg),
             }
         )
     }

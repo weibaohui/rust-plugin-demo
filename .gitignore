@@ -18,6 +18,12 @@ Cargo.lock
 /ci
 frontend/node_modules/
 frontend/dist/
+
+## ------------------------------------------------------------------------------------------------
+# sqlite 数据库文件(运行时产生,非源码)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 frontend/package-lock.json
 reuters_plugin/ui/node_modules/
 reuters_plugin/ui/dist/
