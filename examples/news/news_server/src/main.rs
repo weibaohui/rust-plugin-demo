@@ -20,7 +20,7 @@ use axum::{
     Json,
 };
 use include_dir::{include_dir, Dir};
-use news_api::{HostContext, NewsAgencyPlugin};
+use news_server::{HostContext, NewsAgencyPlugin};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;

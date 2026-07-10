@@ -5,9 +5,11 @@ edition = "2021"
 
 [workspace]
 
+[lib]
+crate-type = ["rlib"]
+
 [dependencies]
 plugkit = { version = "0.2", path = "../../.." }
-news_api = { version = "0.1", path = "../news_api" }
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -19,3 +21,4 @@ walkdir = "2"
 chrono = "0.4"
 mime_guess = "2"
 include_dir = "0.7"
+log = "0.4"

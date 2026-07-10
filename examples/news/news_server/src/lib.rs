@@ -1,5 +1,5 @@
 /*!
-新闻机构插件演示的共享类型。
+新闻机构插件演示的共享类型（合并自 news_api）。
 
 定义所有新闻机构插件库将实例化和注册的插件类型 [`NewsAgencyPlugin`]，
 以及由 `publish()` 方法产生的 [`NewsArticle`]。
@@ -13,7 +13,6 @@ use plugkit::plugin::Plugin;
 use serde::Serialize;
 
 // 让插件可以嵌入自身的 `ui/dist/` 目录树，并在宿主需要时回放。
-// 宿主 (`news_server`) 也用同一个类型来遍历目录。
 pub use include_dir::{Dir, File};
 
 // ------------------------------------------------------------------------------------------------
@@ -153,7 +152,7 @@ impl Plugin for NewsAgencyPlugin {
         if let Some(license) = &self.metadata_license {
             meta = meta.with_license(license);
         }
-        // 菜单树:news_api::PluginMenu 转为 plugkit::metadata::PluginMenu
+        // 菜单树:PluginMenu 转为 plugkit::metadata::PluginMenu
         if !self.menus.is_empty() {
             meta = meta.with_menus(self.menus.iter().map(convert_menu).collect());
         }
@@ -543,7 +542,7 @@ pub fn tass_format(ctx: &dyn HostContext, headline: &str, body: &str) -> NewsArt
 }
 
 // ------------------------------------------------------------------------------------------------
-// 私有辅助:news_api::PluginMenu → plugkit::metadata::PluginMenu
+// 私有辅助:PluginMenu → plugkit::metadata::PluginMenu
 // ------------------------------------------------------------------------------------------------
 
 fn convert_menu(m: &PluginMenu) -> plugkit::metadata::PluginMenu {

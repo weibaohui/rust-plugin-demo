@@ -10,6 +10,6 @@ crate-type = ["dylib"]
 
 [dependencies]
 plugkit = { version = "0.2", path = "../../../.." }
-news_api = { version = "0.1", path = "../../news_api" }
+news_server = { version = "0.1", path = "../../news_server" }
 include_dir = "0.7"
 log = "0.4"

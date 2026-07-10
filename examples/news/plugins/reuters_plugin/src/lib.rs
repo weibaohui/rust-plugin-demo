@@ -7,7 +7,7 @@
 
 use plugkit::plugin::PluginRegistrar;
 use include_dir::{include_dir, Dir};
-use news_api::{reuters_format, NewsAgencyPlugin, PluginMenu};
+use news_server::{reuters_format, NewsAgencyPlugin, PluginMenu};
 
 // ------------------------------------------------------------------------------------------------
 // 编译期嵌入的 `ui/dist/` 目录
