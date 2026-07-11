@@ -375,6 +375,15 @@ async fn handle_load_library(
         .cloned()
         .collect();
 
+    // 注册新插件的嵌入 UI 目录
+    for id in &new_ids {
+        if let Some(p) = ctx.manager.get(id) {
+            if let (Some(base_dir), Some(dist)) = (p.ui_base_dir(), p.ui_dist()) {
+                ctx.register_plugin_ui(base_dir, dist);
+            }
+        }
+    }
+
     let _ = ctx.library_plugins.insert(path, plugin_ids);
 
     let new_plugins: Vec<PluginInfo> = new_ids

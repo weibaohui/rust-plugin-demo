@@ -154,6 +154,9 @@ impl Plugin for AfpPlugin {
     fn has_ui(&self) -> bool {
         self.ui_dist.is_some()
     }
+    fn ui_dist(&self) -> Option<&'static Dir<'static>> {
+        self.ui_dist
+    }
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -82,6 +82,7 @@ pub extern "C" fn register_plugins(
 use crate::database::DatabaseExt;
 use crate::error::Result;
 use crate::metadata::PluginMetadata;
+pub use include_dir::Dir;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
@@ -226,6 +227,13 @@ pub trait Plugin: Debug + Sync + Send {
     /// 插件是否有嵌入的前端 UI。
     fn has_ui(&self) -> bool {
         self.ui_base_dir().is_some()
+    }
+
+    /// 编译期嵌入的 `ui/dist/` 目录树。插件通过 `include_dir!` 宏嵌入后在此返回。
+    /// 宿主据此从内存服务插件 UI 静态文件，无需访问磁盘。
+    /// 默认返回 `None`（无嵌入 UI）。
+    fn ui_dist(&self) -> Option<&'static Dir<'static>> {
+        None
     }
 }
 
