@@ -1,6 +1,6 @@
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import type { PluginInfo } from '../api';
-import { qiankunEntryFor, registerLoadedPlugins } from '../micro';
+import { qiankunEntryFor } from '../micro';
 
 interface PluginUiProps {
   plugin: PluginInfo;
@@ -11,21 +11,9 @@ interface PluginUiProps {
  *
  * `<div id="plugin-mount">` 是 qiankun 约定的挂载点；
  * 子应用的 bootstrap/mount/unmount 由 qiankun 自身驱动。
- * 容器渲染到 DOM 后再注册子应用，确保 qiankun 能找到挂载点。
  */
 export function PluginUi({ plugin }: PluginUiProps) {
   const entry = useMemo(() => qiankunEntryFor(plugin, window.location.origin), [plugin]);
-  const mountedRef = useRef(false);
-
-  useEffect(() => {
-    if (!entry || mountedRef.current) return;
-    mountedRef.current = true;
-    const origin = window.location.origin;
-    const enriched = [{ ...plugin, qiankunEntry: entry }];
-    registerLoadedPlugins(enriched, origin).catch(err => {
-      console.error('qiankun registerLoadedPlugins failed', err);
-    });
-  }, [entry, plugin]);
 
   return (
     <div className="plugin-ui-mount">
