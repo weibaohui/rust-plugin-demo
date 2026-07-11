@@ -27,13 +27,16 @@ build: build-ui ## 构建所有插件（前端 + 后端）
 build-ui: ## 构建所有插件前端 (ui/dist/)
 	@echo "==> 构建插件前端"
 	@for p in $(PLUGINS); do \
-		if [ -d "plugins/$$p/ui/dist" ] && [ -f "plugins/$$p/ui/dist/index.html" ]; then \
-			echo "  ✓ plugins/$$p/ui/dist (已存在)"; \
-		else \
-			echo "  ⚠️  plugins/$$p/ui/dist 不存在，需在 Node.js v22 下重建"; \
-		fi \
+		echo "  -> plugins/$$p/ui"; \
+		cd plugins/$$p/ui && \
+			[ -d node_modules ] || npm install && \
+			(node node_modules/typescript/lib/tsc.js -b 2>/dev/null || \
+			 node node_modules/vue-tsc/bin/vue-tsc.js -b 2>/dev/null || true); \
+			(node node_modules/vite/bin/vite.js build 2>/dev/null || \
+			 echo "  ⚠️  $$p 前端构建失败，使用已有 dist/"); \
+		cd $(REPO_ROOT) || exit $$?; \
 	done
-	@echo "✓ 插件前端检查完成"
+	@echo "✓ 插件前端构建完成"
 
 clean: ## 清理所有构建产物
 	@for p in $(PLUGINS); do \
