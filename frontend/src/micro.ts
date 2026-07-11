@@ -26,7 +26,7 @@ export async function registerLoadedPlugins(
       name: p.id,
       entry: p.qiankunEntry!,
       container: '#plugin-mount',
-      activeRule: location.pathname.startsWith(`/plugin/${encodeURIComponent(p.id)}`),
+      activeRule: (location: Location) => location.pathname.startsWith(`/plugin/${encodeURIComponent(p.id)}`),
       props: { pluginName: p.name },
     }));
 
@@ -37,5 +37,8 @@ export async function registerLoadedPlugins(
     afterMount: [async () => console.log('[qiankun] after mount', apps.map(a => a.name))],
   });
 
-  start({ sandbox: { experimentalStyleIsolation: true } });
+  if (!(window as any).__QIANKUN_STARTED__) {
+    (window as any).__QIANKUN_STARTED__ = true;
+    start({ sandbox: { experimentalStyleIsolation: true } });
+  }
 }
