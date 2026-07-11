@@ -29,11 +29,16 @@ build-ui: ## 构建所有插件前端 (ui/dist/)
 	@for p in $(PLUGINS); do \
 		echo "  -> plugins/$$p/ui"; \
 		cd plugins/$$p/ui && \
-			[ -d node_modules ] || npm install && \
-			(node node_modules/typescript/lib/tsc.js -b 2>/dev/null || \
-			 node node_modules/vue-tsc/bin/vue-tsc.js -b 2>/dev/null || true); \
-			(node node_modules/vite/bin/vite.js build 2>/dev/null || \
-			 echo "  ⚠️  $$p 前端构建失败，使用已有 dist/"); \
+			[ -d node_modules ] || npm install; \
+			if [ -f node_modules/vue-tsc/bin/vue-tsc.js ]; then \
+				echo "  (Vue 项目) vue-tsc + vite"; \
+				node node_modules/vue-tsc/bin/vue-tsc.js -b 2>/dev/null || true; \
+			elif [ -f node_modules/typescript/lib/tsc.js ]; then \
+				echo "  (React 项目) tsc + vite"; \
+				node node_modules/typescript/lib/tsc.js -b 2>/dev/null || true; \
+			fi; \
+			node node_modules/vite/bin/vite.js build 2>/dev/null || \
+				echo "  ⚠️  $$p 前端构建失败，使用已有 dist/"; \
 		cd $(REPO_ROOT) || exit $$?; \
 	done
 	@echo "✓ 插件前端构建完成"
