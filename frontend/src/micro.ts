@@ -3,16 +3,17 @@ export { loadMicroApp, registerMicroApps, start, initGlobalState } from 'qiankun
 
 /**
  * 计算插件的 qiankun 入口 URL。
- * 对于 /plugin-files/afp_plugin/ui/dist/index.html → http://localhost:3000/plugin-files/afp_plugin/ui/dist/index.html
  */
 export function qiankunEntryFor(plugin: { ui_entry?: string | null }, origin: string): string | null {
   if (!plugin.ui_entry) return null;
   return `${origin}${plugin.ui_entry}`;
 }
 
+let started = false;
+
 /**
  * 将当前已加载插件的 qiankun 子应用注册到 qiankun 运行时。
- * 由 App 在插件列表变化时调用；qiankun 内部去重，可重复调用。
+ * 必须在 `#plugin-mount` 容器已渲染到 DOM 后调用。
  */
 export async function registerLoadedPlugins(
   plugins: { id: string; name: string; has_ui: boolean; qiankunEntry?: string }[],
@@ -20,13 +21,18 @@ export async function registerLoadedPlugins(
 ): Promise<void> {
   const { registerMicroApps, start } = await import('qiankun');
 
+  if (!started) {
+    started = true;
+    start({ sandbox: { experimentalStyleIsolation: true } });
+  }
+
   const apps = plugins
     .filter(p => p.has_ui && p.qiankunEntry)
     .map(p => ({
       name: p.id,
       entry: p.qiankunEntry!,
       container: '#plugin-mount',
-      activeRule: (location: Location) => location.pathname.startsWith(`/plugin/${encodeURIComponent(p.id)}`),
+      activeRule: (location: Location) => location.pathname === `/plugin/${encodeURIComponent(p.id)}`,
       props: { pluginName: p.name },
     }));
 
@@ -36,9 +42,4 @@ export async function registerLoadedPlugins(
     beforeLoad: [async () => console.log('[qiankun] before load', apps.map(a => a.name))],
     afterMount: [async () => console.log('[qiankun] after mount', apps.map(a => a.name))],
   });
-
-  if (!(window as any).__QIANKUN_STARTED__) {
-    (window as any).__QIANKUN_STARTED__ = true;
-    start({ sandbox: { experimentalStyleIsolation: true } });
-  }
 }

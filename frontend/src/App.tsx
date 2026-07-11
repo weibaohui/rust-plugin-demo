@@ -7,7 +7,6 @@ import PluginList from './components/PluginList';
 import PluginUi from './components/PluginUi';
 import type { PluginInfo, LibraryInfo } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
-import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 
 /**
  * 极简客户端路由，基于 window.location.pathname。
@@ -72,15 +71,7 @@ export default function App(): ReactNode {
     refreshLibraries();
   }, [refreshPlugins, refreshLibraries]);
 
-  // 插件列表变化时注册 qiankun 子应用
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const origin = window.location.origin;
-    const enriched = plugins.map(p => ({ ...p, qiankunEntry: qiankunEntryFor(p, origin) ?? undefined }));
-    registerLoadedPlugins(enriched, origin).catch(err => {
-      console.error('qiankun registerLoadedPlugins failed', err);
-    });
-  }, [plugins]);
+  // qiankun 子应用注册移到 PluginUi 组件中（容器渲染后再注册）
 
   const handleLoad = async (name: string) => {
     try {
