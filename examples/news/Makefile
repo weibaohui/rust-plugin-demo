@@ -27,13 +27,13 @@ build: build-ui ## 构建所有插件（前端 + 后端）
 build-ui: ## 构建所有插件前端 (ui/dist/)
 	@echo "==> 构建插件前端"
 	@for p in $(PLUGINS); do \
-		echo "  -> plugins/$$p/ui"; \
-		cd plugins/$$p/ui && \
-			[ -d node_modules ] || npm install && \
-			(npm run build 2>/dev/null || echo "  ⚠️  $$p 前端构建失败（可能 Node.js 版本不兼容），使用已有 dist/"); \
-		cd $(REPO_ROOT) || exit $$?; \
+		if [ -d "plugins/$$p/ui/dist" ] && [ -f "plugins/$$p/ui/dist/index.html" ]; then \
+			echo "  ✓ plugins/$$p/ui/dist (已存在)"; \
+		else \
+			echo "  ⚠️  plugins/$$p/ui/dist 不存在，需在 Node.js v22 下重建"; \
+		fi \
 	done
-	@echo "✓ 插件前端构建完成"
+	@echo "✓ 插件前端检查完成"
 
 clean: ## 清理所有构建产物
 	@for p in $(PLUGINS); do \
