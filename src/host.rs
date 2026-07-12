@@ -118,6 +118,21 @@ impl HostApp {
         self
     }
 
+    /// 自动扫描 `plugin_search_dirs` 并加载所有 dylib 插件。
+    /// 加载失败的插件会打印警告日志，不影响宿主启动。
+    pub fn auto_load(mut self) -> Self {
+        let dylibs = find_dylib_paths(&self.plugin_search_dirs);
+        for path in &dylibs {
+            if let Err(e) = self.manager.load_plugins_from(path) {
+                eprintln!("  ⚠️  自动加载插件失败: {:?} — {}", path, e);
+            }
+        }
+        if !dylibs.is_empty() {
+            println!("  ✓ 自动加载 {} 个插件库", dylibs.len());
+        }
+        self
+    }
+
     /// 设置数据库后端。
     pub fn with_database(mut self, db: Arc<dyn DatabaseExt>) -> Self {
         self.manager = self.manager.with_database(db);
