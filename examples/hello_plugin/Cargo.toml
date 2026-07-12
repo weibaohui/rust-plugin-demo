@@ -1,0 +1,13 @@
+[package]
+name = "hello_plugin"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+plugkit = { version = "0.2", path = "../.." }
+serde = { version = "1", features = ["derive"] }

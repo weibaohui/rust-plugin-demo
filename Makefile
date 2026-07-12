@@ -54,11 +54,13 @@ install: frontend ## 构建框架 + 插件 + 安装到 bin/
 	@cp "$(REPO_ROOT)target/debug/plugkit" "$(BIN_DIR)/plugkit" 2>/dev/null || true
 	@cp "$(REPO_ROOT)target/release/plugkit" "$(BIN_DIR)/plugkit" 2>/dev/null || true
 	# 插件 dylib
-	@for p in afp_plugin reuters_plugin; do \
-		dylib="lib$$p.dylib"; \
-		src="$(REPO_ROOT)examples/news/plugins/$$p/target/debug/$$dylib"; \
-		[ -f "$$src" ] && cp "$$src" "$(PLUGIN_DIR)/" && echo "  ✓ $$dylib"; \
-	done
+	  @for p in afp_plugin reuters_plugin hello_plugin; do \
+	   dylib="lib$$p.dylib"; \
+	   src="$(REPO_ROOT)examples/news/plugins/$$p/target/debug/$$dylib"; \
+	   [ -f "$$src" ] && cp "$$src" "$(PLUGIN_DIR)/" && echo "  ✓ $$dylib" || true; \
+	   src="$(REPO_ROOT)examples/$$p/target/debug/$$dylib"; \
+	   [ -f "$$src" ] && cp "$$src" "$(PLUGIN_DIR)/" && echo "  ✓ $$dylib" || true; \
+	  done
 	@echo "✓ 安装完成:"
 	@echo "  $(BIN_DIR)/plugkit"
 	@ls $(PLUGIN_DIR)/ 2>/dev/null | sed 's/^/  /'
