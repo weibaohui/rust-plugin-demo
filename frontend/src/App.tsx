@@ -237,8 +237,8 @@ export default function App(): ReactNode {
                     p.status === 'Enabled' ? <Popconfirm key="start" title={`启动 ${p.name}（后台任务 + cron）?`} onConfirm={() => handleStart(p.id)}><Button type="primary" size="small" icon={<PlayCircleOutlined />}>启动</Button></Popconfirm> : null,
                     p.status === 'Enabled' ? <Popconfirm key="disable" title={`禁用 ${p.name}?`} onConfirm={() => handleDisable(p.id)}><Button size="small" icon={<PauseCircleOutlined />}>禁用</Button></Popconfirm> : null,
                     p.status === 'Running' ? <Popconfirm key="stop" title={`停止 ${p.name}?`} onConfirm={() => handleStop(p.id)}><Button size="small" icon={<CaretDownOutlined />}>停止</Button></Popconfirm> : null,
-                    <Popconfirm key="unload-full" title="完全卸载？插件数据（表、配置）将被永久删除，不可恢复。" onConfirm={() => handleUnload(p.id, false)}><Button danger size="small" icon={<DeleteOutlined />}>完全卸载</Button></Popconfirm>,
-                    <Popconfirm key="unload-keep" title="仅卸载？插件将被卸载，但数据（表、配置）会保留，重新加载后即可恢复。" onConfirm={() => handleUnload(p.id, true)}><Button size="small">仅卸载</Button></Popconfirm>,
+                    p.status === 'Loaded' ? <Popconfirm key="unload-full" title="完全卸载？插件数据（表、配置）将被永久删除，不可恢复。" onConfirm={() => handleUnload(p.id, false)}><Button danger size="small" icon={<DeleteOutlined />}>完全卸载</Button></Popconfirm> : null,
+                    p.status === 'Loaded' ? <Popconfirm key="unload-keep" title="仅卸载？插件将被卸载，但数据（表、配置）会保留，重新加载后即可恢复。" onConfirm={() => handleUnload(p.id, true)}><Button size="small">仅卸载</Button></Popconfirm> : null,
                   ].filter(Boolean)}
                 >
                   <Space direction="vertical" style={{ width: '100%' }}>
