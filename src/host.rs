@@ -125,7 +125,12 @@ impl HostApp {
         for path in &dylibs {
             if let Err(e) = self.manager.load_plugins_from(path) {
                 eprintln!("  ⚠️  自动加载插件失败: {:?} — {}", path, e);
+                continue;
             }
+            // 记录此库贡献的插件 ID
+            let plugins = self.manager.plugins();
+            let plugin_ids: Vec<String> = plugins.iter().map(|p| p.plugin_id().clone()).collect();
+            let _ = self.library_plugins.insert(path.clone(), plugin_ids);
         }
         if !dylibs.is_empty() {
             println!("  ✓ 自动加载 {} 个插件库", dylibs.len());
@@ -145,6 +150,153 @@ impl HostApp {
     /// 以便 `serve_plugin_ui_handler` 可以从内存服务前端文件。
     pub fn register_plugin_ui(&mut self, base_dir: &str, dist: &'static Dir<'static>) {
         let _ = self.plugin_ui_dirs.insert(base_dir.to_string(), dist);
+    }
+
+    /// 启动插件热重载。
+    ///
+    /// 监听 `plugin_search_dirs` 下所有 dylib 文件的变化，当文件被修改/创建时
+    /// 自动重新加载该库对应的所有插件（stop → disable → unload → load）。
+    ///
+    /// 返回一个 `AbortHandle`，调用方可在宿主关闭时取消监听。
+    ///
+    /// # 示例
+    ///
+    /// ```rust,ignore
+    /// let state = Arc::new(RwLock::new(HostApp::new().with_plugin_search_dir("bin/plugins")));
+    /// let _watch = HostApp::start_hot_reload(state.clone());
+    /// ```
+    pub fn start_hot_reload(state: SharedState) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+            use std::path::Path;
+
+            // 获取搜索目录
+            let dirs: Vec<PathBuf> = {
+                let ctx = state.read().unwrap();
+                ctx.plugin_search_dirs.clone()
+            };
+
+            if dirs.is_empty() {
+                tracing::info!("[hot-reload] plugin_search_dirs 为空，跳过热重载");
+                return;
+            }
+
+            let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+
+            let mut watcher = RecommendedWatcher::new(
+                move |res: Result<Event, notify::Error>| {
+                    if let Ok(event) = res {
+                        let _ = tx.blocking_send(event);
+                    }
+                },
+                Config::default().with_poll_interval(Duration::from_secs(2)),
+            )
+            .expect("无法创建文件监听器");
+
+            for dir in &dirs {
+                if dir.exists() {
+                    let _ = watcher.watch(dir, RecursiveMode::Recursive);
+                    tracing::info!("[hot-reload] 监听目录: {:?}", dir);
+                }
+            }
+
+            while let Some(event) = rx.recv().await {
+                match event.kind {
+                    EventKind::Modify(_) | EventKind::Create(_) => {
+                        for path in &event.paths {
+                            if !path.is_file() {
+                                continue;
+                            }
+                            let ext = match path.extension() {
+                                Some(e) => e,
+                                None => continue,
+                            };
+                            if ext != PLATFORM_DYLIB_EXTENSION {
+                                continue;
+                            }
+
+                            tracing::info!("[hot-reload] 检测到插件变更: {:?}", path);
+
+                            // 查找该库对应的插件 ID
+                            let plugin_ids: Vec<String> = {
+                                let ctx = state.read().unwrap();
+                                ctx.library_plugins
+                                    .iter()
+                                    .filter(|(lib_path, _)| {
+                                        lib_path.file_name() == path.file_name()
+                                    })
+                                    .flat_map(|(_, ids)| ids.clone())
+                                    .collect()
+                            };
+
+                            if plugin_ids.is_empty() {
+                                tracing::warn!("[hot-reload] 未找到库 {:?} 对应的插件", path);
+                                continue;
+                            }
+
+                            // 卸载插件（stop → disable → unload）
+                            for id in &plugin_ids {
+                                tracing::info!("[hot-reload] 卸载插件: {}", id);
+                                if let Err(e) = {
+                                    let mut ctx = state.write().unwrap();
+                                    // 停止 cron
+                                    if let Some(flags) = ctx.cron_flags.remove(id) {
+                                        for f in flags {
+                                            f.store(true, Ordering::Relaxed);
+                                        }
+                                    }
+                                    // 从 library_plugins 移除
+                                    for (_lib_path, ids) in ctx.library_plugins.iter_mut() {
+                                        ids.retain(|i| i != id);
+                                    }
+                                    ctx.library_plugins.retain(|_k, v| !v.is_empty());
+                                    // 卸载
+                                    ctx.manager.unload_plugin(id, false)
+                                } {
+                                    tracing::error!("[hot-reload] 卸载插件失败: {} — {}", id, e);
+                                }
+                            }
+
+                            // 重新加载
+                            tracing::info!("[hot-reload] 重新加载库: {:?}", path);
+                            if let Err(e) = {
+                                let mut ctx = state.write().unwrap();
+                                ctx.manager.load_plugins_from(path)
+                            } {
+                                tracing::error!("[hot-reload] 重新加载失败: {:?} — {}", path, e);
+                            }
+
+                            // 重新注册插件 UI
+                            let new_plugins: Vec<String> = {
+                                let ctx = state.read().unwrap();
+                                ctx.library_plugins
+                                    .iter()
+                                    .filter(|(lib_path, _)| {
+                                        lib_path.file_name() == path.file_name()
+                                    })
+                                    .flat_map(|(_, ids)| ids.clone())
+                                    .collect()
+                            };
+                            for id in &new_plugins {
+                                if let Some(p) = {
+                                    let ctx = state.read().unwrap();
+                                    ctx.manager.get(id)
+                                } {
+                                    if let (Some(base_dir), Some(dist)) =
+                                        (p.ui_base_dir(), p.ui_dist())
+                                    {
+                                        let mut ctx = state.write().unwrap();
+                                        ctx.register_plugin_ui(base_dir, dist);
+                                        tracing::info!("[hot-reload] 注册插件 UI: {}", id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        })
     }
 }
 

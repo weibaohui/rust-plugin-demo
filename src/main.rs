@@ -41,6 +41,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .auto_load();
     let state: plugkit::host::SharedState = Arc::new(std::sync::RwLock::new(app));
 
+    // 启动热重载监听
+    let _hot_reload_watch = HostApp::start_hot_reload(state.clone());
+
     let router = host_router()
         .fallback(serve_frontend_handler)
         .with_state(state);
