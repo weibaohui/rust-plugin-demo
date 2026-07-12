@@ -496,11 +496,6 @@ impl PluginManager {
         let meta = plugin.plugin.metadata();
         let dependencies = meta.dependencies().to_vec();
 
-        // 检查循环依赖
-        if let Err(e) = self.check_circular_dependency(plugin_id, &dependencies) {
-            return Err(e);
-        }
-
         // 释放读锁，避免死锁
         drop(plugin);
         drop(meta);
