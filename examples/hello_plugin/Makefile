@@ -1,6 +1,6 @@
 REPO_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: all build clean help
+.PHONY: all build build-ui clean help
 
 all: build ## 默认: 构建后端 dylib
 
@@ -12,6 +12,9 @@ build: ## 构建后端 dylib（无 UI）
 	@echo "==> 构建后端 dylib"
 	@cargo build
 	@echo "✓ 构建完成 → target/debug/libhello_plugin.dylib"
+
+build-ui: ## 无前端，跳过
+	@echo "  (无 UI，跳过)"
 
 clean: ## 清理构建产物
 	@cargo clean

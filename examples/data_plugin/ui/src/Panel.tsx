@@ -22,7 +22,6 @@ function PanelContent({ pluginId = 'data_plugin' }: PanelProps): ReactNode {
     { id: 1, title: '示例记录 #1', content: '这是 data_plugin 的示例数据', created_at: '2026-07-12 10:00:00' },
     { id: 2, title: '示例记录 #2', content: 'cron 定时生成的数据', created_at: '2026-07-12 10:01:00' },
   ]);
-  const { message } = AntApp.useApp();
 
   const columns: TableColumnsType<DataRow> = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
