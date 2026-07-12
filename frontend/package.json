@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.3.2",
+    "antd": "^6.5.0",
     "lucide-react": "^1.23.0",
     "qiankun": "^2.10.16",
     "react": "^19.0.0",
