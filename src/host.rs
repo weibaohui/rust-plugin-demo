@@ -484,11 +484,7 @@ pub struct PluginInfo {
 /// 菜单仅在 `Enabled` / `Running` 状态下对外暴露。
 pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
     let meta = p.metadata();
-    let menu = if matches!(status, PluginStatus::Enabled | PluginStatus::Running) {
-        meta.menus().to_vec()
-    } else {
-        Vec::new()
-    };
+    let menu = meta.menus().to_vec();
     PluginInfo {
         id: p.plugin_id().clone(),
         name: meta.title,
