@@ -80,12 +80,21 @@ impl Plugin for DataPlugin {
     }
 
     fn metadata(&self) -> PluginMetadata {
+        use plugkit::metadata::PluginMenu;
         PluginMetadata::new(&self.id, "Data Plugin", env!("CARGO_PKG_VERSION"))
             .with_icon("🗄️")
             .with_description("数据 CRUD 插件 — 演示数据库操作、UI 数据表格、cron 定时任务")
             .with_author("plugkit <plugkit@example.com>")
             .with_license("MIT")
             .with_tables_owned(vec!["data_items".to_string()])
+            .with_menus(vec![PluginMenu {
+                key: "data_panel".into(),
+                title: "数据管理".into(),
+                icon: Some("🗄️".into()),
+                route: Some(format!("/plugin/{}", PLUGIN_ID)),
+                order: 200,
+                children: vec![],
+            }])
     }
 
     fn on_load(&self, _db: &dyn DatabaseExt) -> plugkit::error::Result<()> {

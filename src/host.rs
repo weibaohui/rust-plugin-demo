@@ -222,10 +222,17 @@ impl HostApp {
                 eprintln!("  ⚠️  自动加载插件失败: {:?} — {}", path, e);
                 continue;
             }
-            // 记录此库贡献的插件 ID
+            // 记录此库贡献的插件 ID 并注册 UI
             let plugins = self.manager.plugins();
             let plugin_ids: Vec<String> = plugins.iter().map(|p| p.plugin_id().clone()).collect();
-            let _ = self.library_plugins.insert(path.clone(), plugin_ids);
+            let _ = self.library_plugins.insert(path.clone(), plugin_ids.clone());
+            for id in &plugin_ids {
+                if let Some(p) = self.manager.get(id) {
+                    if let (Some(base_dir), Some(dist)) = (p.ui_base_dir(), p.ui_dist()) {
+                        self.register_plugin_ui(base_dir, dist);
+                    }
+                }
+            }
         }
         if !dylibs.is_empty() {
             println!("  ✓ 自动加载 {} 个插件库", dylibs.len());
