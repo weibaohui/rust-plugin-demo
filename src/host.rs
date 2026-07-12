@@ -64,12 +64,21 @@ pub trait HostContext: Send + Sync {
     fn server_version(&self) -> &str;
     /// 向宿主日志记录一条消息。
     fn log_message(&self, msg: &str);
+    /// 按级别记录日志。
+    fn log(&self, level: &str, msg: &str) {
+        let formatted = format!("[{}] {}", level, msg);
+        self.log_message(&formatted);
+    }
     /// 获取当前服务器时间（格式化的时间字符串）。
     fn server_time(&self) -> String;
     /// 当前已加载的插件数量。
     fn plugin_count(&self) -> usize;
     /// 发布事件到事件总线，其他插件可通过 `on_event` 接收。
     fn emit(&self, topic: &str, payload: serde_json::Value);
+    /// 获取宿主数据库操作接口（若可用）。
+    fn database(&self) -> Option<Arc<dyn DatabaseExt>> {
+        None
+    }
 }
 
 /// 宿主的默认 `HostContext` 实现。
@@ -116,6 +125,10 @@ impl HostContext for HostContextImpl {
     }
     fn plugin_count(&self) -> usize {
         self.state.read().unwrap().manager.plugins().len()
+    }
+    fn database(&self) -> Option<Arc<dyn DatabaseExt>> {
+        let ctx = self.state.read().unwrap();
+        ctx.manager.database().clone()
     }
     fn emit(&self, topic: &str, payload: serde_json::Value) {
         let event = crate::event_bus::Event {
