@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter("plugkit=info")
         .init();
 
-    let db = SqliteDatabase::in_memory()?;
+    let db = SqliteDatabase::open("plugkit.db")?;
     let app = HostApp::new()
         .with_database(Arc::new(db))
         .with_plugin_search_dir("bin/plugins")
