@@ -3,6 +3,10 @@ plugkit 通用插件宿主 — 纯框架演示，无任何业务代码。
 
 启动后即获得完整的插件管理 API + 通用管理前端。
 二开者从此起步，补充自己的业务路由即可。
+
+用法：
+- `plugkit`               启动宿主
+- `plugkit new <name>`    生成插件骨架
 */
 
 use plugkit::database::SqliteDatabase;
@@ -11,6 +15,21 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+
+    // 子命令：plugkit new <name>
+    if args.len() >= 3 && args[1] == "new" {
+        let plugin_name = &args[2];
+        let target_dir = std::env::current_dir()?;
+        plugkit::cli::generate_plugin(&target_dir, plugin_name)?;
+        return Ok(());
+    }
+    if args.len() >= 2 && args[1] == "new" {
+        eprintln!("用法: plugkit new <插件名>");
+        eprintln!("插件名仅允许小写字母、数字、下划线");
+        std::process::exit(1);
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter("plugkit=info")
         .init();

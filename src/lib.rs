@@ -111,3 +111,6 @@ pub mod database;
 
 /// 通用插件宿主模块。提供 axum HTTP 路由用于插件加载/卸载/生命周期/cron/UI 服务。
 pub mod host;
+
+/// 插件脚手架生成器（`plugkit new <name>`）。
+pub mod cli;
