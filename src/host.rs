@@ -36,7 +36,7 @@ use axum::{
     body::Body,
     extract::{Path, State},
     http::{Request, Response, StatusCode},
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use include_dir::{include_dir, Dir};
@@ -1218,6 +1218,143 @@ pub async fn handle_install_plugin(
 }
 
 // ------------------------------------------------------------------------------------------------
+// 通用数据 CRUD
+// ------------------------------------------------------------------------------------------------
+
+/// JSON 请求体：创建/更新数据记录。
+#[derive(Debug, Deserialize)]
+pub struct DataPayload {
+    pub title: String,
+    pub content: String,
+}
+
+/// 将 `DbValue` 行转换为 `serde_json::Value`（按列顺序）。
+fn row_to_json(row: &[crate::database::DbValue], columns: &[&str]) -> serde_json::Value {
+    let mut map = serde_json::Map::new();
+    for (i, col) in columns.iter().enumerate() {
+        let val = match row.get(i) {
+            Some(crate::database::DbValue::Null) => serde_json::Value::Null,
+            Some(crate::database::DbValue::Int(n)) => serde_json::json!(n),
+            Some(crate::database::DbValue::Real(f)) => serde_json::json!(f),
+            Some(crate::database::DbValue::Text(s)) => serde_json::json!(s),
+            Some(crate::database::DbValue::Blob(_)) => serde_json::Value::Null,
+            None => serde_json::Value::Null,
+        };
+        map.insert(col.to_string(), val);
+    }
+    serde_json::Value::Object(map)
+}
+
+/// 获取数据库引用（从 state 的 manager 中提取）。
+fn get_db(state: &SharedState) -> Result<std::sync::Arc<dyn crate::database::DatabaseExt>, (StatusCode, Json<ApiMessage>)> {
+    let ctx = state.read().unwrap();
+    ctx.manager.database().clone().ok_or_else(|| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
+            message: "数据库未配置".to_string(),
+        }))
+    })
+}
+
+/// GET /api/data/:table — 列出表中所有记录。
+pub async fn handle_data_list(
+    State(state): State<SharedState>,
+    Path(table): Path<String>,
+) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, Json<ApiMessage>)> {
+    let db = get_db(&state)?;
+    db.validate_table_name(&table).map_err(|e| {
+        (StatusCode::BAD_REQUEST, Json(ApiMessage {
+            message: format!("无效的表名: {}", e),
+        }))
+    })?;
+    let rows = db.query(&format!("SELECT id, title, content, created_at FROM {} ORDER BY id DESC", table)).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
+            message: format!("查询失败: {}", e),
+        }))
+    })?;
+    let cols = vec!["id", "title", "content", "created_at"];
+    let result: Vec<serde_json::Value> = rows.iter().map(|r| row_to_json(r, &cols)).collect();
+    Ok(Json(result))
+}
+
+/// POST /api/data/:table — 创建一条记录。
+pub async fn handle_data_create(
+    State(state): State<SharedState>,
+    Path(table): Path<String>,
+    Json(payload): Json<DataPayload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
+    let db = get_db(&state)?;
+    db.validate_table_name(&table).map_err(|e| {
+        (StatusCode::BAD_REQUEST, Json(ApiMessage {
+            message: format!("无效的表名: {}", e),
+        }))
+    })?;
+    use chrono::Local;
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    db.execute_with(
+        &format!("INSERT INTO {} (title, content, created_at) VALUES (?1, ?2, ?3)", table),
+        &[
+            crate::database::DbValue::Text(payload.title),
+            crate::database::DbValue::Text(payload.content),
+            crate::database::DbValue::Text(now),
+        ],
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
+            message: format!("插入失败: {}", e),
+        }))
+    })?;
+    Ok(Json(serde_json::json!({"message": "创建成功"})))
+}
+
+/// PUT /api/data/:table/:id — 更新一条记录。
+pub async fn handle_data_update(
+    State(state): State<SharedState>,
+    Path((table, id)): Path<(String, i64)>,
+    Json(payload): Json<DataPayload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
+    let db = get_db(&state)?;
+    db.validate_table_name(&table).map_err(|e| {
+        (StatusCode::BAD_REQUEST, Json(ApiMessage {
+            message: format!("无效的表名: {}", e),
+        }))
+    })?;
+    db.execute_with(
+        &format!("UPDATE {} SET title = ?1, content = ?2 WHERE id = ?3", table),
+        &[
+            crate::database::DbValue::Text(payload.title),
+            crate::database::DbValue::Text(payload.content),
+            crate::database::DbValue::Int(id),
+        ],
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
+            message: format!("更新失败: {}", e),
+        }))
+    })?;
+    Ok(Json(serde_json::json!({"message": "更新成功"})))
+}
+
+/// DELETE /api/data/:table/:id — 删除一条记录。
+pub async fn handle_data_delete(
+    State(state): State<SharedState>,
+    Path((table, id)): Path<(String, i64)>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
+    let db = get_db(&state)?;
+    db.validate_table_name(&table).map_err(|e| {
+        (StatusCode::BAD_REQUEST, Json(ApiMessage {
+            message: format!("无效的表名: {}", e),
+        }))
+    })?;
+    db.execute_with(
+        &format!("DELETE FROM {} WHERE id = ?1", table),
+        &[crate::database::DbValue::Int(id)],
+    ).map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
+            message: format!("删除失败: {}", e),
+        }))
+    })?;
+    Ok(Json(serde_json::json!({"message": "删除成功"})))
+}
+
+// ------------------------------------------------------------------------------------------------
 // 路由组装
 // ------------------------------------------------------------------------------------------------
 
@@ -1267,6 +1404,9 @@ pub fn host_router() -> Router<SharedState> {
         .route("/api/plugins/:id/cron/run", post(handle_run_cron))
         // 批量操作
         .route("/api/plugins", delete(handle_unload_all))
+        // 通用数据 CRUD
+        .route("/api/data/:table", get(handle_data_list).post(handle_data_create))
+        .route("/api/data/:table/:id", put(handle_data_update).delete(handle_data_delete))
         // 插件前端 UI 静态文件
         .route("/plugin-files/*path", get(handle_serve_plugin_ui))
         // CORS
