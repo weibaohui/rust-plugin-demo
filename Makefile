@@ -54,7 +54,7 @@ install: frontend ## 构建框架 + 插件 + 安装到 bin/
 	@cp "$(REPO_ROOT)target/debug/plugkit" "$(BIN_DIR)/plugkit" 2>/dev/null || true
 	@cp "$(REPO_ROOT)target/release/plugkit" "$(BIN_DIR)/plugkit" 2>/dev/null || true
 	# 插件 dylib
-	  @for p in afp_plugin reuters_plugin hello_plugin; do \
+	  @for p in afp_plugin reuters_plugin hello_plugin data_plugin; do \
 	   dylib="lib$$p.dylib"; \
 	   src="$(REPO_ROOT)examples/news/plugins/$$p/target/debug/$$dylib"; \
 	   [ -f "$$src" ] && cp "$$src" "$(PLUGIN_DIR)/" && echo "  ✓ $$dylib" || true; \

@@ -1,0 +1,15 @@
+[package]
+name = "data_plugin"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["dylib"]
+
+[dependencies]
+plugkit = { version = "0.2", path = "../.." }
+include_dir = "0.7"
+serde = { version = "1", features = ["derive"] }
+chrono = "0.4"
