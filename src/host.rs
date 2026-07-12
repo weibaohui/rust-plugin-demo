@@ -68,6 +68,85 @@ pub trait HostContext: Send + Sync {
     fn server_time(&self) -> String;
     /// 当前已加载的插件数量。
     fn plugin_count(&self) -> usize;
+    /// 发布事件到事件总线，其他插件可通过 `on_event` 接收。
+    fn emit(&self, topic: &str, payload: serde_json::Value);
+}
+
+/// 宿主的默认 `HostContext` 实现。
+///
+/// 持有 `SharedState` 引用，插件通过 `ctx.emit()` 发布事件时，
+/// 此实现会锁定状态、将事件推入总线、并广播给所有已启用/运行中的插件。
+#[derive(Clone)]
+pub struct HostContextImpl {
+    state: SharedState,
+    plugin_id: String,
+    server_name: String,
+    server_version: String,
+}
+
+impl HostContextImpl {
+    pub fn new(
+        state: SharedState,
+        plugin_id: &str,
+        server_name: &str,
+        server_version: &str,
+    ) -> Self {
+        Self {
+            state,
+            plugin_id: plugin_id.to_string(),
+            server_name: server_name.to_string(),
+            server_version: server_version.to_string(),
+        }
+    }
+}
+
+impl HostContext for HostContextImpl {
+    fn server_name(&self) -> &str {
+        &self.server_name
+    }
+    fn server_version(&self) -> &str {
+        &self.server_version
+    }
+    fn log_message(&self, msg: &str) {
+        tracing::info!("[plugin:{}] {}", self.plugin_id, msg);
+    }
+    fn server_time(&self) -> String {
+        use chrono::Local;
+        Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+    fn plugin_count(&self) -> usize {
+        self.state.read().unwrap().manager.plugins().len()
+    }
+    fn emit(&self, topic: &str, payload: serde_json::Value) {
+        let event = crate::event_bus::Event {
+            topic: topic.to_string(),
+            payload,
+            source: self.plugin_id.clone(),
+        };
+        let mut ctx = self.state.write().unwrap();
+        // 推入事件总线
+        ctx.event_bus.publish(event.clone());
+        // 广播给所有已启用/运行中的插件
+        let plugins = ctx.manager.plugins();
+        let plugin_ids: Vec<String> = plugins.iter().map(|p| p.plugin_id().clone()).collect();
+        // 释放读锁，避免死锁
+        drop(plugins);
+        for id in &plugin_ids {
+            if id == &self.plugin_id {
+                continue; // 不给自己发
+            }
+            let status = ctx.manager.plugin_status(id);
+            if matches!(
+                status,
+                Some(crate::plugin::PluginStatus::Enabled)
+                    | Some(crate::plugin::PluginStatus::Running)
+            ) {
+                if let Some(p) = ctx.manager.get(id) {
+                    let _ = p.on_event(&event);
+                }
+            }
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -89,6 +168,8 @@ pub struct HostApp {
     pub plugin_ui_dirs: HashMap<String, &'static Dir<'static>>,
     /// 插件 dylib 搜索目录（宿主配置）。`find_dylib_paths()` 会合并这些目录与默认启发式。
     pub plugin_search_dirs: Vec<PathBuf>,
+    /// 插件间事件总线。
+    pub event_bus: crate::event_bus::EventBus,
 }
 
 impl Default for HostApp {
@@ -106,6 +187,7 @@ impl HostApp {
             cron_flags: HashMap::new(),
             plugin_ui_dirs: HashMap::new(),
             plugin_search_dirs: Vec::new(),
+            event_bus: crate::event_bus::EventBus::new(),
         }
     }
 

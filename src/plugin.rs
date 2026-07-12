@@ -235,6 +235,14 @@ pub trait Plugin: Debug + Sync + Send {
     fn ui_dist(&self) -> Option<&'static Dir<'static>> {
         None
     }
+
+    /// 接收事件总线上的事件。默认 no-op。
+    ///
+    /// 其他插件通过 `ctx.emit(topic, payload)` 发布事件后，
+    /// 宿主会广播给所有已启用/运行中的插件，每个插件通过此方法接收。
+    fn on_event(&self, _event: &crate::event_bus::Event) -> Result<()> {
+        Ok(())
+    }
 }
 
 ///

@@ -114,3 +114,6 @@ pub mod host;
 
 /// 插件脚手架生成器（`plugkit new <name>`）。
 pub mod cli;
+
+/// 插件间事件总线。
+pub mod event_bus;
