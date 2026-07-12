@@ -713,7 +713,9 @@ async fn handle_get_plugin(
 async fn handle_unload_plugin(
     State(state): State<SharedState>,
     Path(id): Path<String>,
+    query: axum::extract::Query<HashMap<String, String>>,
 ) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    let keep_data = query.get("keep_data").map(|s| s == "true").unwrap_or(false);
     let mut ctx = state.write().unwrap();
     // 先从 library_plugins 记录中移除
     for (_lib_path, ids) in ctx.library_plugins.iter_mut() {
@@ -728,7 +730,7 @@ async fn handle_unload_plugin(
         }
     }
 
-    ctx.manager.unload_plugin(&id, false).map_err(|e| {
+    ctx.manager.unload_plugin(&id, keep_data).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiMessage {
@@ -737,9 +739,10 @@ async fn handle_unload_plugin(
         )
     })?;
 
-    info!("已卸载插件 '{}'", id);
+    let action = if keep_data { "保留数据卸载" } else { "完全卸载" };
+    info!("已{}插件 '{}'", action, id);
     Ok(Json(ApiMessage {
-        message: format!("插件 '{}' 已卸载", id),
+        message: format!("插件 '{}' 已{}", id, if keep_data { "卸载（数据已保留）" } else { "完全卸载（数据已删除）" }),
     }))
 }
 

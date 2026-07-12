@@ -5,6 +5,7 @@ import { listCrons, runCron } from '../api';
 interface PluginListProps {
   plugins: PluginInfo[];
   onUnload: (id: string) => void;
+  onUnloadKeepData: (id: string) => void;
   onUnloadAll: () => void;
   onRefresh: () => Promise<PluginInfo[]>;
   onEnable: (id: string) => Promise<void>;
@@ -26,6 +27,7 @@ function confirmAction(msg: string): boolean {
 interface PluginCardProps {
   plugin: PluginInfo;
   onUnload: (id: string) => void;
+  onUnloadKeepData: (id: string) => void;
   onEnable: (id: string) => Promise<void>;
   onDisable: (id: string) => Promise<void>;
   onStart: (id: string) => Promise<void>;
@@ -33,7 +35,7 @@ interface PluginCardProps {
   onRefresh: () => Promise<PluginInfo[]>;
 }
 
-function PluginCard({ plugin, onUnload, onEnable, onDisable, onStart, onStop, onRefresh }: PluginCardProps) {
+function PluginCard({ plugin, onUnload, onUnloadKeepData, onEnable, onDisable, onStart, onStop, onRefresh }: PluginCardProps) {
   const [crons, setCrons] = useState<CronInfo[]>([]);
   const meta = STATUS_META[plugin.status];
 
@@ -147,10 +149,20 @@ function PluginCard({ plugin, onUnload, onEnable, onDisable, onStart, onStop, on
         <button
           className="btn btn-danger btn-sm"
           onClick={() => {
-            if (confirmAction(`卸载 ${plugin.name}(清理 + 关库)?`)) onUnload(plugin.id);
+            if (confirmAction(`完全卸载 ${plugin.name}？\n\n插件数据（表、配置）将被永久删除，不可恢复。\n确定要继续吗？`)) onUnload(plugin.id);
           }}
+          title="删除插件及所有数据"
         >
-          卸载
+          完全卸载
+        </button>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            if (confirmAction(`仅卸载 ${plugin.name}？\n\n插件将被卸载，但数据（表、配置）会保留，\n重新加载后即可恢复使用。`)) onUnloadKeepData(plugin.id);
+          }}
+          title="仅卸载插件，保留数据"
+        >
+          仅卸载
         </button>
       </div>
     </div>
@@ -160,6 +172,7 @@ function PluginCard({ plugin, onUnload, onEnable, onDisable, onStart, onStop, on
 export default function PluginList({
   plugins,
   onUnload,
+  onUnloadKeepData,
   onUnloadAll,
   onRefresh,
   onEnable,
@@ -204,6 +217,7 @@ export default function PluginList({
               key={plugin.id}
               plugin={plugin}
               onUnload={onUnload}
+              onUnloadKeepData={onUnloadKeepData}
               onEnable={onEnable}
               onDisable={onDisable}
               onStart={onStart}

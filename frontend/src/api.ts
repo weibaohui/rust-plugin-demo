@@ -63,8 +63,8 @@ export async function getPlugin(id: string): Promise<PluginInfo> {
   return res.json();
 }
 
-export async function unloadPlugin(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}`, {
+export async function unloadPlugin(id: string, keepData = false): Promise<void> {
+  const res = await fetch(`${API_BASE}/plugins/${encodeURIComponent(id)}?keep_data=${keepData}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error('卸载失败');

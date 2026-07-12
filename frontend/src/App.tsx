@@ -102,9 +102,24 @@ export default function App(): ReactNode {
   const handleUnload = async (id: string) => {
     try {
       setError(null);
-      addLog(`正在卸载插件: ${id}...`);
-      await unloadPlugin(id);
-      addLog(`✅ 已卸载: ${id}`);
+      addLog(`正在完全卸载: ${id}...`);
+      await unloadPlugin(id, false);
+      addLog(`✅ 已完全卸载: ${id}（数据已删除）`);
+      await refreshPlugins();
+      await refreshLibraries();
+    } catch (e) {
+      const msg = `❌ 卸载失败: ${e}`;
+      addLog(msg);
+      setError(msg);
+    }
+  };
+
+  const handleUnloadKeepData = async (id: string) => {
+    try {
+      setError(null);
+      addLog(`正在卸载（保留数据）: ${id}...`);
+      await unloadPlugin(id, true);
+      addLog(`✅ 已卸载: ${id}（数据已保留）`);
       await refreshPlugins();
       await refreshLibraries();
     } catch (e) {
@@ -213,6 +228,7 @@ export default function App(): ReactNode {
       <PluginList
         plugins={plugins}
         onUnload={handleUnload}
+        onUnloadKeepData={handleUnloadKeepData}
         onUnloadAll={handleUnloadAll}
         onRefresh={refreshPlugins}
         onEnable={handleEnable}
