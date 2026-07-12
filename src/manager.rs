@@ -493,16 +493,38 @@ impl PluginManager {
             ))
             .into());
         }
-        // 依赖检测:按 metadata.name 查找,要求其状态为 Enabled/Running
         let meta = plugin.plugin.metadata();
-        for dep in meta.dependencies() {
+        let dependencies = meta.dependencies().to_vec();
+
+        // 检查循环依赖
+        if let Err(e) = self.check_circular_dependency(plugin_id, &dependencies) {
+            return Err(e);
+        }
+
+        // 释放读锁，避免死锁
+        drop(plugin);
+        drop(meta);
+
+        // 自动启用未满足的依赖
+        for dep in &dependencies {
             let dep_status = plugins
                 .values()
                 .find(|p| p.plugin.metadata().name == *dep)
                 .map(|p| p.status);
+
             match dep_status {
-                Some(s) if matches!(s, PluginStatus::Enabled | PluginStatus::Running) => {}
-                Some(s) => {
+                Some(PluginStatus::Loaded) => {
+                    // 递归启用依赖
+                    let dep_id = plugins
+                        .values()
+                        .find(|p| p.plugin.metadata().name == *dep)
+                        .map(|p| p.plugin.plugin_id().clone())
+                        .unwrap();
+                    drop(plugins);
+                    self.enable_plugin(&dep_id)?;
+                    plugins = self.plugins.write().unwrap();
+                }
+                Some(s) if !matches!(s, PluginStatus::Enabled | PluginStatus::Running) => {
                     return Err(ErrorKind::DependencyUnmet(format!(
                         "cannot enable '{}': dependency '{}' current {:?}, expected Enabled/Running",
                         plugin_id, dep, s
@@ -511,19 +533,77 @@ impl PluginManager {
                 }
                 None => {
                     return Err(ErrorKind::DependencyUnmet(format!(
-                        "cannot enable '{}': dependency '{}' not registered",
-                        plugin_id, dep
+                        "cannot enable '{}': dependency '{}' not registered. Available plugins: {}",
+                        plugin_id,
+                        dep,
+                        plugins
+                            .values()
+                            .map(|p| format!("'{}' ({})", p.plugin.metadata().name, p.plugin.plugin_id()))
+                            .collect::<Vec<_>>()
+                            .join(", ")
                     ))
                     .into());
                 }
+                _ => {}
             }
         }
+
         // 状态变更(同一写锁)
         let plugin = plugins
             .get_mut(plugin_id)
             .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         plugin.plugin.on_enable()?;
         plugin.status = PluginStatus::Enabled;
+        Ok(())
+    }
+
+    /// 检测循环依赖：从 `plugin_id` 出发，检查其依赖链中是否包含自身。
+    fn check_circular_dependency(
+        &self,
+        plugin_id: &str,
+        dependencies: &[String],
+    ) -> Result<()> {
+        let plugins = self.plugins.read().unwrap();
+
+        // 构建依赖图：所有插件的依赖关系
+        let mut graph: HashMap<String, Vec<String>> = HashMap::new();
+        for p in plugins.values() {
+            graph
+                .entry(p.plugin.plugin_id().clone())
+                .or_default()
+                .extend(p.plugin.metadata().dependencies().iter().cloned());
+        }
+
+        // BFS 检查是否有循环
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = std::collections::VecDeque::new();
+
+        for dep in dependencies {
+            queue.push_back(dep.clone());
+        }
+
+        while let Some(current) = queue.pop_front() {
+            if current == plugin_id {
+                return Err(ErrorKind::CircularDependency(format!(
+                    "循环依赖: 启用 '{}' 会形成依赖环 ({} → ... → {})",
+                    plugin_id, plugin_id, plugin_id
+                ))
+                .into());
+            }
+            if !visited.insert(current.clone()) {
+                continue;
+            }
+            // 查找该依赖的 plugin_id
+            for p in plugins.values() {
+                if p.plugin.metadata().name == current {
+                    for next_dep in p.plugin.metadata().dependencies() {
+                        queue.push_back(next_dep.clone());
+                    }
+                    break;
+                }
+            }
+        }
+
         Ok(())
     }
 
