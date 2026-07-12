@@ -1255,12 +1255,30 @@ fn get_db(state: &SharedState) -> Result<std::sync::Arc<dyn crate::database::Dat
     })
 }
 
+/// 校验表名是否被某个已加载插件声明为 `tables_owned`。
+fn validate_table_ownership(state: &SharedState, table: &str) -> Result<(), (StatusCode, Json<ApiMessage>)> {
+    let ctx = state.read().unwrap();
+    let plugins = ctx.manager.plugins();
+    for p in &plugins {
+        if p.metadata().tables().contains(&table.to_string()) {
+            return Ok(());
+        }
+    }
+    Err((
+        StatusCode::FORBIDDEN,
+        Json(ApiMessage {
+            message: format!("表 '{}' 未被任何已加载插件声明为自有表，拒绝访问", table),
+        }),
+    ))
+}
+
 /// GET /api/data/:table — 列出表中所有记录。
 pub async fn handle_data_list(
     State(state): State<SharedState>,
     Path(table): Path<String>,
 ) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, Json<ApiMessage>)> {
     let db = get_db(&state)?;
+    validate_table_ownership(&state, &table)?;
     db.validate_table_name(&table).map_err(|e| {
         (StatusCode::BAD_REQUEST, Json(ApiMessage {
             message: format!("无效的表名: {}", e),
@@ -1283,6 +1301,7 @@ pub async fn handle_data_create(
     Json(payload): Json<DataPayload>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
     let db = get_db(&state)?;
+    validate_table_ownership(&state, &table)?;
     db.validate_table_name(&table).map_err(|e| {
         (StatusCode::BAD_REQUEST, Json(ApiMessage {
             message: format!("无效的表名: {}", e),
@@ -1312,6 +1331,7 @@ pub async fn handle_data_update(
     Json(payload): Json<DataPayload>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
     let db = get_db(&state)?;
+    validate_table_ownership(&state, &table)?;
     db.validate_table_name(&table).map_err(|e| {
         (StatusCode::BAD_REQUEST, Json(ApiMessage {
             message: format!("无效的表名: {}", e),
@@ -1338,6 +1358,7 @@ pub async fn handle_data_delete(
     Path((table, id)): Path<(String, i64)>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
     let db = get_db(&state)?;
+    validate_table_ownership(&state, &table)?;
     db.validate_table_name(&table).map_err(|e| {
         (StatusCode::BAD_REQUEST, Json(ApiMessage {
             message: format!("无效的表名: {}", e),
