@@ -5,13 +5,14 @@
 - 后端：dylib crate，仅依赖 plugkit，实现 Plugin trait + register_plugins
 - 前端：React + antd + vite-plugin-qiankun（官方推荐技术栈）
 - 构建脚本：Makefile 一键构建前端 + 后端
+
+也提供 `plugkit package <dylib_path> [--ui-dir <path>]` 命令，
+将构建好的 dylib 和前端打包成 `.plugin` 单文件，便于分发和上传安装。
 */
 
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
-
-/// 入口：在 `base_dir` 下生成名为 `plugin_name` 的插件骨架。
 ///
 /// `plugin_name` 同时用作 crate 名和目录名（仅允许 `[a-z0-9_]`）。
 /// 生成失败返回 IO 错误。
@@ -487,9 +488,65 @@ build-ui: ## 构建前端 (ui/dist/)
 	@echo "✓ 前端构建完成 → ui/dist/"
 
 clean: ## 清理构建产物
-	@cargo clean
-	@rm -rf ui/dist ui/node_modules
-	@echo "✓ 清理完成"
+  @cargo clean
+  @rm -rf ui/dist ui/node_modules
+  @echo "✓ 清理完成"
 "#;
     t.replace("{name}", name)
+}
+
+/// 将构建好的插件 dylib 打包成 `.plugin` 单文件。
+///
+/// 打包格式为 tar.gz，包含：
+/// - `plugin.dylib`（或 `.so` / `.dll`）— 插件动态库
+/// - `ui/` — 可选的插件前端目录
+///
+/// 输出文件为 `<name>.plugin`，可直接在宿主前端上传安装。
+///
+/// # 参数
+///
+/// * `dylib_path` — 构建好的 dylib 文件路径
+/// * `ui_dir` — 可选的前端 `ui/dist/` 目录路径
+/// * `output_path` — 输出 `.plugin` 文件路径
+pub fn package_plugin(
+    dylib_path: &Path,
+    ui_dir: Option<&Path>,
+    output_path: &Path,
+) -> io::Result<()> {
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::fs::File;
+    use tar::Builder;
+
+    let file = File::create(output_path)?;
+    let encoder = GzEncoder::new(file, Compression::default());
+    let mut tar = Builder::new(encoder);
+
+    // 添加 dylib
+    let dylib_name = dylib_path
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "dylib 路径无效"))?;
+    let mut dylib_file = File::open(dylib_path)?;
+    tar.append_file(dylib_name, &mut dylib_file)?;
+
+    // 添加 ui/dist/ 目录（若提供）
+    if let Some(ui) = ui_dir {
+        if ui.exists() {
+            tar.append_dir_all("ui", ui)?;
+        } else {
+            eprintln!("  ⚠️  UI 目录不存在: {:?}，跳过", ui);
+        }
+    }
+
+    let encoder = tar.into_inner()?;
+    encoder.finish()?;
+
+    println!();
+    println!("✓ 打包完成: {}", output_path.display());
+    println!("  大小: {} bytes", output_path.metadata().map(|m| m.len()).unwrap_or(0));
+    println!();
+    println!("上传到宿主: curl -F \"file=@{}\" http://localhost:3000/api/plugins/install", output_path.display());
+    println!();
+
+    Ok(())
 }

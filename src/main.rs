@@ -7,6 +7,7 @@ plugkit 通用插件宿主 — 纯框架演示，无任何业务代码。
 用法：
 - `plugkit`               启动宿主
 - `plugkit new <name>`    生成插件骨架
+- `plugkit package <dylib> [--ui-dir <path>]`  打包插件为 .plugin 文件
 */
 
 use plugkit::database::SqliteDatabase;
@@ -27,6 +28,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() >= 2 && args[1] == "new" {
         eprintln!("用法: plugkit new <插件名>");
         eprintln!("插件名仅允许小写字母、数字、下划线");
+        std::process::exit(1);
+    }
+
+    // 子命令：plugkit package <dylib> [--ui-dir <path>]
+    if args.len() >= 3 && args[1] == "package" {
+        let dylib_path = std::path::PathBuf::from(&args[2]);
+        let ui_dir = if args.len() >= 4 && args[3] == "--ui-dir" {
+            args.get(4).map(|p| std::path::PathBuf::from(p))
+        } else {
+            None
+        };
+        let output_name = dylib_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("plugin")
+            .to_string();
+        let output_path = std::path::PathBuf::from(format!("{}.plugin", output_name));
+        plugkit::cli::package_plugin(
+            &dylib_path,
+            ui_dir.as_deref(),
+            &output_path,
+        )?;
+        return Ok(());
+    }
+    if args.len() >= 2 && args[1] == "package" {
+        eprintln!("用法: plugkit package <dylib_path> [--ui-dir <path>]");
+        eprintln!("示例: plugkit package target/debug/libafp_plugin.dylib --ui-dir examples/news/plugins/afp_plugin/ui/dist");
         std::process::exit(1);
     }
 

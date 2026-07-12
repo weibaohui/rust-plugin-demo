@@ -1060,6 +1060,160 @@ pub async fn serve_frontend_handler(req: Request<Body>) -> Response<Body> {
         .unwrap()
 }
 
+/// 安装插件 — 接收 `.plugin` 文件上传（tar.gz 格式）。
+///
+/// 请求体为原始二进制数据（`Content-Type: application/octet-stream`）。
+/// 服务器将解包到第一个插件搜索目录并自动加载。
+///
+/// 用法:
+/// ```bash
+/// curl -X POST --data-binary @my_plugin.plugin http://localhost:3000/api/plugins/install
+/// ```
+pub async fn handle_install_plugin(
+    State(state): State<SharedState>,
+    body: axum::body::Bytes,
+) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
+    use flate2::read::GzDecoder;
+    use std::fs;
+    use std::io::Read;
+    use tar::Archive;
+
+    // 获取插件搜索目录
+    let search_dir = {
+        let ctx = state.read().unwrap();
+        ctx.plugin_search_dirs
+            .first()
+            .cloned()
+            .unwrap_or_else(|| PathBuf::from("bin/plugins"))
+    };
+
+    // 创建临时目录
+    let temp_dir = std::env::temp_dir().join(format!(
+        "plugkit_install_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_dir).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("无法创建临时目录: {}", e),
+            }),
+        )
+    })?;
+
+    // 写入临时文件
+    let plugin_path = temp_dir.join("upload.plugin");
+    fs::write(&plugin_path, &body).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("无法写入临时文件: {}", e),
+            }),
+        )
+    })?;
+
+    // 解压 tar.gz 到临时目录
+    let file = fs::File::open(&plugin_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("无法打开临时文件: {}", e),
+            }),
+        )
+    })?;
+    let decoder = GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+    archive.unpack(&temp_dir).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: format!(
+                    "解包失败: {} — 请确认文件是有效的 .plugin (tar.gz) 格式",
+                    e
+                ),
+            }),
+        )
+    })?;
+
+    // 查找解包后的 dylib（只在临时目录中查找，不扫描整个搜索目录）
+    let dylib_ext = crate::manager::PLATFORM_DYLIB_EXTENSION;
+    let dylib_paths: Vec<PathBuf> = walkdir::WalkDir::new(&temp_dir)
+        .max_depth(3)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == dylib_ext)
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect();
+
+    if dylib_paths.is_empty() {
+        let _ = fs::remove_dir_all(&temp_dir);
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiMessage {
+                message: format!(".plugin 文件中未找到 .{} 动态库文件", dylib_ext),
+            }),
+        ));
+    }
+
+    // 复制 dylib 到搜索目录并加载
+    let mut loaded = Vec::new();
+    for src_path in &dylib_paths {
+        let file_name = src_path.file_name().unwrap();
+        let dest_path = search_dir.join(file_name);
+
+        // 复制到搜索目录
+        fs::copy(src_path, &dest_path).map_err(|e| {
+            let _ = fs::remove_dir_all(&temp_dir);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiMessage {
+                    message: format!("复制 dylib 失败: {}", e),
+                }),
+            )
+        })?;
+
+        // 加载
+        let mut ctx = state.write().unwrap();
+        match ctx.manager.load_plugins_from(&dest_path) {
+            Ok(()) => {
+                let plugins = ctx.manager.plugins();
+                let plugin_ids: Vec<String> =
+                    plugins.iter().map(|p| p.plugin_id().clone()).collect();
+                let _ = ctx.library_plugins.insert(dest_path.clone(), plugin_ids.clone());
+                loaded.extend(plugin_ids);
+                info!("已安装插件库: {:?}", dest_path);
+            }
+            Err(e) => {
+                warn!("加载插件失败: {:?} — {}", dest_path, e);
+            }
+        }
+    }
+
+    // 清理临时目录
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    let msg = if loaded.is_empty() {
+        "插件安装失败：未找到可加载的插件".to_string()
+    } else {
+        format!(
+            "✅ 安装成功，加载了 {} 个插件: {}",
+            loaded.len(),
+            loaded.join(", ")
+        )
+    };
+
+    info!("{}", msg);
+    Ok(Json(ApiMessage { message: msg }))
+}
+
 // ------------------------------------------------------------------------------------------------
 // 路由组装
 // ------------------------------------------------------------------------------------------------
@@ -1092,6 +1246,9 @@ pub fn host_router() -> Router<SharedState> {
         // 插件库管理
         .route("/api/libraries", get(handle_scan_libraries))
         .route("/api/libraries/:name/load", post(handle_load_library))
+        // 插件安装（允许最大 50MB 上传）
+        .route("/api/plugins/install", post(handle_install_plugin))
+        .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024))
         // 插件管理
         .route("/api/plugins", get(handle_list_plugins))
         .route(
