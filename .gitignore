@@ -26,6 +26,9 @@ frontend/dist/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
 frontend/package-lock.json
 
 # 任意插件的 UI 目录:node_modules / 构建产物 / 包锁 / vite/tsc 缓存
