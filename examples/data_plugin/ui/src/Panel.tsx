@@ -1,8 +1,8 @@
 /**
  * data_plugin 数据面板 — 完整 CRUD 操作。
- * 通过宿主通用数据 API 实现增删改查。
+ * 通过插件自定义路由 /plugin-api/<pluginId>/items 实现增删改查。
  */
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { Card, Table, Tag, Button, Space, Modal, Form, Input, message, Popconfirm } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { TableColumnsType } from 'antd';
@@ -18,9 +18,9 @@ interface PanelProps {
   pluginId?: string;
 }
 
-const API_BASE = '/api/data/data_items';
+function PanelContent({ pluginId = 'data_plugin::data_plugin::DataPlugin' }: PanelProps): ReactNode {
+  const apiBase = useMemo(() => `/plugin-api/${pluginId}/items`, [pluginId]);
 
-function PanelContent({ pluginId = 'data_plugin' }: PanelProps): ReactNode {
   const [data, setData] = useState<DataRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -30,7 +30,7 @@ function PanelContent({ pluginId = 'data_plugin' }: PanelProps): ReactNode {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_BASE);
+      const res = await fetch(apiBase);
       if (res.ok) {
         const list: DataRow[] = await res.json();
         setData(list);
@@ -40,7 +40,7 @@ function PanelContent({ pluginId = 'data_plugin' }: PanelProps): ReactNode {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiBase]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -59,7 +59,7 @@ function PanelContent({ pluginId = 'data_plugin' }: PanelProps): ReactNode {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
-      const url = editing ? `${API_BASE}/${editing.id}` : API_BASE;
+      const url = editing ? `${apiBase}/${editing.id}` : apiBase;
       const method = editing ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -81,7 +81,7 @@ function PanelContent({ pluginId = 'data_plugin' }: PanelProps): ReactNode {
 
   const handleDelete = async (id: number) => {
     try {
-      const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
       if (res.ok) {
         message.success('删除成功');
         fetchData();
