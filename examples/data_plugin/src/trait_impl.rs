@@ -1,14 +1,14 @@
-//! Plugin trait 实现 — 生命周期钩子、元数据、路由。
+//! Plugin trait 实现 — 生命周期钩子。
 //!
-//! 元数据委托给 [`metadata`] 模块，路由委托给 [`handlers`] 模块。
+//! 元数据委托给 [`metadata`]，路由委托给 [`routes`]，
+//! handler 实现在 [`handlers`]。
 
-use crate::handlers;
 use crate::metadata;
+use crate::routes;
 use crate::plugin::DataPlugin;
 use plugkit::database::DatabaseExt;
 use plugkit::metadata::{CronSpec, PluginMetadata};
 use plugkit::plugin::{Plugin, PluginRoute};
-use http::Method;
 use include_dir::Dir;
 
 impl Plugin for DataPlugin {
@@ -92,27 +92,6 @@ impl Plugin for DataPlugin {
     // ---- 路由 ----
 
     fn routes(&self) -> Vec<PluginRoute> {
-        vec![
-            PluginRoute {
-                method: Method::GET,
-                path: "/items".into(),
-                handler: handlers::handle_list_items,
-            },
-            PluginRoute {
-                method: Method::POST,
-                path: "/items".into(),
-                handler: handlers::handle_create_item,
-            },
-            PluginRoute {
-                method: Method::PUT,
-                path: "/items".into(),
-                handler: handlers::handle_update_item,
-            },
-            PluginRoute {
-                method: Method::DELETE,
-                path: "/items".into(),
-                handler: handlers::handle_delete_item,
-            },
-        ]
+        routes::routes()
     }
 }

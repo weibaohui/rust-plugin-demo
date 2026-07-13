@@ -12,6 +12,7 @@ mod plugin;
 mod trait_impl;
 mod handlers;
 mod metadata;
+mod routes;
 
 use plugkit::plugin::PluginRegistrar;
 use std::sync::Arc;
