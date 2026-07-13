@@ -122,7 +122,7 @@ struct LoadedLibrary {
 /// 当宿主未注入数据库时使用的占位实现——所有方法返回错误或空,便于无 DB 的简单用例。
 ///
 #[derive(Debug)]
-struct NoopDatabase;
+pub struct NoopDatabase;
 
 impl DatabaseExt for NoopDatabase {
     fn execute(&self, _sql: &str) -> Result<usize> {
@@ -533,7 +533,11 @@ impl PluginManager {
                         dep,
                         plugins
                             .values()
-                            .map(|p| format!("'{}' ({})", p.plugin.metadata().name, p.plugin.plugin_id()))
+                            .map(|p| format!(
+                                "'{}' ({})",
+                                p.plugin.metadata().name,
+                                p.plugin.plugin_id()
+                            ))
                             .collect::<Vec<_>>()
                             .join(", ")
                     ))
@@ -553,11 +557,7 @@ impl PluginManager {
     }
 
     /// 检测循环依赖：从 `plugin_id` 出发，检查其依赖链中是否包含自身。
-    fn check_circular_dependency(
-        &self,
-        plugin_id: &str,
-        dependencies: &[String],
-    ) -> Result<()> {
+    fn check_circular_dependency(&self, plugin_id: &str, dependencies: &[String]) -> Result<()> {
         let plugins = self.plugins.read().unwrap();
 
         // 构建依赖图：所有插件的依赖关系

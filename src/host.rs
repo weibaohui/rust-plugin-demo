@@ -35,8 +35,9 @@ use crate::plugin::{Plugin, PluginStatus};
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{Request, Response, StatusCode},
-    routing::{delete, get, post, put},
+    http::{Method, Request, Response, StatusCode},
+    response::IntoResponse,
+    routing::{any, delete, get, post},
     Json, Router,
 };
 use include_dir::{include_dir, Dir};
@@ -225,7 +226,9 @@ impl HostApp {
             // 记录此库贡献的插件 ID 并注册 UI
             let plugins = self.manager.plugins();
             let plugin_ids: Vec<String> = plugins.iter().map(|p| p.plugin_id().clone()).collect();
-            let _ = self.library_plugins.insert(path.clone(), plugin_ids.clone());
+            let _ = self
+                .library_plugins
+                .insert(path.clone(), plugin_ids.clone());
             for id in &plugin_ids {
                 if let Some(p) = self.manager.get(id) {
                     if let (Some(base_dir), Some(dist)) = (p.ui_base_dir(), p.ui_dist()) {
@@ -739,10 +742,22 @@ async fn handle_unload_plugin(
         )
     })?;
 
-    let action = if keep_data { "保留数据卸载" } else { "完全卸载" };
+    let action = if keep_data {
+        "保留数据卸载"
+    } else {
+        "完全卸载"
+    };
     info!("已{}插件 '{}'", action, id);
     Ok(Json(ApiMessage {
-        message: format!("插件 '{}' 已{}", id, if keep_data { "卸载（数据已保留）" } else { "完全卸载（数据已删除）" }),
+        message: format!(
+            "插件 '{}' 已{}",
+            id,
+            if keep_data {
+                "卸载（数据已保留）"
+            } else {
+                "完全卸载（数据已删除）"
+            }
+        ),
     }))
 }
 
@@ -1136,10 +1151,7 @@ pub async fn handle_install_plugin(
         (
             StatusCode::BAD_REQUEST,
             Json(ApiMessage {
-                message: format!(
-                    "解包失败: {} — 请确认文件是有效的 .plugin (tar.gz) 格式",
-                    e
-                ),
+                message: format!("解包失败: {} — 请确认文件是有效的 .plugin (tar.gz) 格式", e),
             }),
         )
     })?;
@@ -1193,7 +1205,9 @@ pub async fn handle_install_plugin(
                 let plugins = ctx.manager.plugins();
                 let plugin_ids: Vec<String> =
                     plugins.iter().map(|p| p.plugin_id().clone()).collect();
-                let _ = ctx.library_plugins.insert(dest_path.clone(), plugin_ids.clone());
+                let _ = ctx
+                    .library_plugins
+                    .insert(dest_path.clone(), plugin_ids.clone());
                 loaded.extend(plugin_ids);
                 info!("已安装插件库: {:?}", dest_path);
             }
@@ -1221,161 +1235,77 @@ pub async fn handle_install_plugin(
 }
 
 // ------------------------------------------------------------------------------------------------
-// 通用数据 CRUD
+// 插件自定义 HTTP 路由（catch-all）
 // ------------------------------------------------------------------------------------------------
 
-/// JSON 请求体：创建/更新数据记录。
-#[derive(Debug, Deserialize)]
-pub struct DataPayload {
-    pub title: String,
-    pub content: String,
-}
+/// 处理 `/plugin-api/:plugin_id/*route` catch-all 请求。
+///
+/// 宿主从 URL 中提取插件 ID 和剩余路径，查找对应插件，
+/// 封装 `PluginRouteRequest` 后调用 `plugin.handle_route()`，
+/// 将返回的 `PluginRouteResponse` 转为 axum Response。
+async fn handle_plugin_route(
+    State(state): State<SharedState>,
+    Path((plugin_id, route)): Path<(String, String)>,
+    method: Method,
+    axum::extract::Query(query_params): axum::extract::Query<HashMap<String, String>>,
+    body_bytes: axum::body::Bytes,
+) -> impl IntoResponse {
+    use crate::plugin::{PluginHttpMethod, PluginRouteRequest};
 
-/// 将 `DbValue` 行转换为 `serde_json::Value`（按列顺序）。
-fn row_to_json(row: &[crate::database::DbValue], columns: &[&str]) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
-    for (i, col) in columns.iter().enumerate() {
-        let val = match row.get(i) {
-            Some(crate::database::DbValue::Null) => serde_json::Value::Null,
-            Some(crate::database::DbValue::Int(n)) => serde_json::json!(n),
-            Some(crate::database::DbValue::Real(f)) => serde_json::json!(f),
-            Some(crate::database::DbValue::Text(s)) => serde_json::json!(s),
-            Some(crate::database::DbValue::Blob(_)) => serde_json::Value::Null,
-            None => serde_json::Value::Null,
-        };
-        map.insert(col.to_string(), val);
-    }
-    serde_json::Value::Object(map)
-}
-
-/// 获取数据库引用（从 state 的 manager 中提取）。
-fn get_db(state: &SharedState) -> Result<std::sync::Arc<dyn crate::database::DatabaseExt>, (StatusCode, Json<ApiMessage>)> {
+    // 从 HostApp 中获取 PluginManager 的数据库和插件
     let ctx = state.read().unwrap();
-    ctx.manager.database().clone().ok_or_else(|| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
-            message: "数据库未配置".to_string(),
-        }))
-    })
-}
+    let db = ctx.manager.database().clone();
+    let plugin = ctx.manager.get(&plugin_id);
+    drop(ctx);
 
-/// 校验表名是否被某个已加载插件声明为 `tables_owned`。
-fn validate_table_ownership(state: &SharedState, table: &str) -> Result<(), (StatusCode, Json<ApiMessage>)> {
-    let ctx = state.read().unwrap();
-    let plugins = ctx.manager.plugins();
-    for p in &plugins {
-        if p.metadata().tables().contains(&table.to_string()) {
-            return Ok(());
+    let plugin = match plugin {
+        Some(p) => p,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(ApiMessage {
+                    message: format!("插件 '{}' 未找到", plugin_id),
+                }),
+            )
+                .into_response();
         }
-    }
-    Err((
-        StatusCode::FORBIDDEN,
-        Json(ApiMessage {
-            message: format!("表 '{}' 未被任何已加载插件声明为自有表，拒绝访问", table),
-        }),
-    ))
-}
+    };
 
-/// GET /api/data/:table — 列出表中所有记录。
-pub async fn handle_data_list(
-    State(state): State<SharedState>,
-    Path(table): Path<String>,
-) -> Result<Json<Vec<serde_json::Value>>, (StatusCode, Json<ApiMessage>)> {
-    let db = get_db(&state)?;
-    validate_table_ownership(&state, &table)?;
-    db.validate_table_name(&table).map_err(|e| {
-        (StatusCode::BAD_REQUEST, Json(ApiMessage {
-            message: format!("无效的表名: {}", e),
-        }))
-    })?;
-    let rows = db.query(&format!("SELECT id, title, content, created_at FROM {} ORDER BY id DESC", table)).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
-            message: format!("查询失败: {}", e),
-        }))
-    })?;
-    let cols = vec!["id", "title", "content", "created_at"];
-    let result: Vec<serde_json::Value> = rows.iter().map(|r| row_to_json(r, &cols)).collect();
-    Ok(Json(result))
-}
+    // 解析 HTTP 方法
+    let http_method = match method {
+        Method::GET => PluginHttpMethod::GET,
+        Method::POST => PluginHttpMethod::POST,
+        Method::PUT => PluginHttpMethod::PUT,
+        Method::DELETE => PluginHttpMethod::DELETE,
+        Method::PATCH => PluginHttpMethod::PATCH,
+        _ => PluginHttpMethod::GET,
+    };
 
-/// POST /api/data/:table — 创建一条记录。
-pub async fn handle_data_create(
-    State(state): State<SharedState>,
-    Path(table): Path<String>,
-    Json(payload): Json<DataPayload>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
-    let db = get_db(&state)?;
-    validate_table_ownership(&state, &table)?;
-    db.validate_table_name(&table).map_err(|e| {
-        (StatusCode::BAD_REQUEST, Json(ApiMessage {
-            message: format!("无效的表名: {}", e),
-        }))
-    })?;
-    use chrono::Local;
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    db.execute_with(
-        &format!("INSERT INTO {} (title, content, created_at) VALUES (?1, ?2, ?3)", table),
-        &[
-            crate::database::DbValue::Text(payload.title),
-            crate::database::DbValue::Text(payload.content),
-            crate::database::DbValue::Text(now),
-        ],
-    ).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
-            message: format!("插入失败: {}", e),
-        }))
-    })?;
-    Ok(Json(serde_json::json!({"message": "创建成功"})))
-}
+    // 构造请求路径（恢复前导 /）
+    let path = format!("/{}", route);
 
-/// PUT /api/data/:table/:id — 更新一条记录。
-pub async fn handle_data_update(
-    State(state): State<SharedState>,
-    Path((table, id)): Path<(String, i64)>,
-    Json(payload): Json<DataPayload>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
-    let db = get_db(&state)?;
-    validate_table_ownership(&state, &table)?;
-    db.validate_table_name(&table).map_err(|e| {
-        (StatusCode::BAD_REQUEST, Json(ApiMessage {
-            message: format!("无效的表名: {}", e),
-        }))
-    })?;
-    db.execute_with(
-        &format!("UPDATE {} SET title = ?1, content = ?2 WHERE id = ?3", table),
-        &[
-            crate::database::DbValue::Text(payload.title),
-            crate::database::DbValue::Text(payload.content),
-            crate::database::DbValue::Int(id),
-        ],
-    ).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
-            message: format!("更新失败: {}", e),
-        }))
-    })?;
-    Ok(Json(serde_json::json!({"message": "更新成功"})))
-}
+    // 解析 body 为 JSON（可选）
+    let body_json = if body_bytes.is_empty() {
+        None
+    } else {
+        serde_json::from_slice(&body_bytes).ok()
+    };
 
-/// DELETE /api/data/:table/:id — 删除一条记录。
-pub async fn handle_data_delete(
-    State(state): State<SharedState>,
-    Path((table, id)): Path<(String, i64)>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiMessage>)> {
-    let db = get_db(&state)?;
-    validate_table_ownership(&state, &table)?;
-    db.validate_table_name(&table).map_err(|e| {
-        (StatusCode::BAD_REQUEST, Json(ApiMessage {
-            message: format!("无效的表名: {}", e),
-        }))
-    })?;
-    db.execute_with(
-        &format!("DELETE FROM {} WHERE id = ?1", table),
-        &[crate::database::DbValue::Int(id)],
-    ).map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(ApiMessage {
-            message: format!("删除失败: {}", e),
-        }))
-    })?;
-    Ok(Json(serde_json::json!({"message": "删除成功"})))
+    // 调用插件处理器
+    let db_ref: &dyn DatabaseExt = db.as_deref().unwrap_or(&crate::manager::NoopDatabase);
+    let resp = plugin.handle_route(
+        &PluginRouteRequest {
+            http_method,
+            path,
+            query_params,
+            body_json,
+        },
+        db_ref,
+    );
+
+    // 转为 axum Response
+    let status = StatusCode::from_u16(resp.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    (status, Json(resp.body_json)).into_response()
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1401,6 +1331,7 @@ pub async fn handle_data_delete(
 /// | GET  | `/api/plugins/:id/cron` | 列出插件定时任务 |
 /// | POST | `/api/plugins/:id/cron/run` | 手动触发插件定时任务 |
 /// | GET  | `/plugin-files/*path` | 服务插件 UI 静态文件 |
+/// | ANY  | `/plugin-api/:plugin_id/*route` | 插件自定义 HTTP 路由 |
 ///
 /// 调用方需在返回的 Router 上补充：
 /// - `fallback(serve_frontend_handler)` 或自定义 fallback
@@ -1428,11 +1359,10 @@ pub fn host_router() -> Router<SharedState> {
         .route("/api/plugins/:id/cron/run", post(handle_run_cron))
         // 批量操作
         .route("/api/plugins", delete(handle_unload_all))
-        // 通用数据 CRUD
-        .route("/api/data/:table", get(handle_data_list).post(handle_data_create))
-        .route("/api/data/:table/:id", put(handle_data_update).delete(handle_data_delete))
         // 插件前端 UI 静态文件
         .route("/plugin-files/*path", get(handle_serve_plugin_ui))
+        // 插件自定义 HTTP 路由（catch-all）
+        .route("/plugin-api/:plugin_id/*route", any(handle_plugin_route))
         // CORS
         .layer(CorsLayer::permissive())
 }

@@ -45,11 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or("plugin")
             .to_string();
         let output_path = std::path::PathBuf::from(format!("{}.plugin", output_name));
-        plugkit::cli::package_plugin(
-            &dylib_path,
-            ui_dir.as_deref(),
-            &output_path,
-        )?;
+        plugkit::cli::package_plugin(&dylib_path, ui_dir.as_deref(), &output_path)?;
         return Ok(());
     }
     if args.len() >= 2 && args[1] == "package" {

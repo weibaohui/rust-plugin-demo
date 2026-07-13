@@ -543,9 +543,15 @@ pub fn package_plugin(
 
     println!();
     println!("✓ 打包完成: {}", output_path.display());
-    println!("  大小: {} bytes", output_path.metadata().map(|m| m.len()).unwrap_or(0));
+    println!(
+        "  大小: {} bytes",
+        output_path.metadata().map(|m| m.len()).unwrap_or(0)
+    );
     println!();
-    println!("上传到宿主: curl -F \"file=@{}\" http://localhost:3000/api/plugins/install", output_path.display());
+    println!(
+        "上传到宿主: curl -F \"file=@{}\" http://localhost:3000/api/plugins/install",
+        output_path.display()
+    );
     println!();
 
     Ok(())

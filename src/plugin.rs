@@ -117,6 +117,67 @@ pub enum PluginStatus {
 ///
 pub use crate::metadata::CronSpec;
 
+// ------------------------------------------------------------------------------------------------
+// 插件 HTTP 路由类型
+// ------------------------------------------------------------------------------------------------
+
+/// HTTP 请求方法。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginHttpMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+}
+
+/// 插件路由定义 — 插件声明自己支持的 HTTP 端点。
+#[derive(Debug, Clone)]
+pub struct PluginRouteDef {
+    pub method: PluginHttpMethod,
+    pub path: String, // 插件命名空间下的相对路径，如 "/items"、"/items/:id"
+}
+
+/// HTTP 请求上下文 — 宿主将 axum 请求信息封装后传给插件。
+#[derive(Debug)]
+pub struct PluginRouteRequest {
+    pub http_method: PluginHttpMethod,
+    pub path: String,
+    pub query_params: std::collections::HashMap<String, String>,
+    pub body_json: Option<serde_json::Value>,
+}
+
+/// HTTP 响应 — 插件返回给宿主，宿主转为 axum Response。
+#[derive(Debug)]
+pub struct PluginRouteResponse {
+    pub status: u16,
+    pub body_json: serde_json::Value,
+}
+
+impl PluginRouteResponse {
+    /// 创建 200 OK 响应。
+    pub fn ok(body: serde_json::Value) -> Self {
+        Self {
+            status: 200,
+            body_json: body,
+        }
+    }
+    /// 创建 404 Not Found 响应。
+    pub fn not_found() -> Self {
+        Self {
+            status: 404,
+            body_json: serde_json::json!({"error": "not found"}),
+        }
+    }
+    /// 创建 500 Internal Server Error 响应。
+    pub fn internal_error(msg: &str) -> Self {
+        Self {
+            status: 500,
+            body_json: serde_json::json!({"error": msg}),
+        }
+    }
+}
+
 ///
 /// 任何插件类型都必须实现此 trait。它不仅提供插件 ID 与元信息,还提供了实现者可用来管理
 /// 插件所拥有资源的生命周期方法。
@@ -242,6 +303,28 @@ pub trait Plugin: Debug + Sync + Send {
     /// 宿主会广播给所有已启用/运行中的插件，每个插件通过此方法接收。
     fn on_event(&self, _event: &crate::event_bus::Event) -> Result<()> {
         Ok(())
+    }
+
+    /// 声明插件的 HTTP 路由列表（供宿主生成文档 / 校验）。
+    ///
+    /// 路由挂载在 `/plugin-api/<plugin-id>/` 命名空间下，
+    /// 此处声明的 `path` 为相对于该命名空间的路径，如 `"/items"`、`"/items/:id"`。
+    /// 默认返回空列表。
+    fn routes(&self) -> Vec<PluginRouteDef> {
+        vec![]
+    }
+
+    /// 处理 HTTP 请求 — 插件自治地处理所有路由逻辑。
+    ///
+    /// `req` 中包含 HTTP 方法、剩余路径、查询参数和请求体 JSON。
+    /// `db` 为宿主传递的数据库操作接口。
+    /// 默认返回 404。
+    fn handle_route(
+        &self,
+        _req: &PluginRouteRequest,
+        _db: &dyn DatabaseExt,
+    ) -> PluginRouteResponse {
+        PluginRouteResponse::not_found()
     }
 }
 
