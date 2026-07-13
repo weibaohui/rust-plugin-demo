@@ -701,6 +701,14 @@ impl PluginManager {
         plugins.get(plugin_id).map(|p| p.status)
     }
 
+    /// 插件是否已激活（Enabled 或 Running），路由可访问。
+    pub fn is_plugin_active(&self, plugin_id: &str) -> bool {
+        matches!(
+            self.plugin_status(plugin_id),
+            Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
+        )
+    }
+
     ///
     /// 返回插件的元信息(若存在)。宿主据此进行发现、显示、依赖检测、启动顺序排序。
     ///

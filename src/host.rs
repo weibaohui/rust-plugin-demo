@@ -1252,38 +1252,24 @@ async fn handle_plugin_route(
     body_bytes: axum::body::Bytes,
 ) -> impl IntoResponse {
     let ctx = state.read().unwrap();
+    let is_active = ctx.manager.is_plugin_active(&plugin_id);
     let db = ctx.manager.database().clone();
     let plugin = ctx.manager.get(&plugin_id);
-    let status = ctx.manager.plugin_status(&plugin_id);
     drop(ctx);
 
-    // 插件不存在
+    // 插件不存在或未启用——路由视作不存在
     let plugin = match plugin {
-        Some(p) => p,
-        None => {
+        Some(p) if is_active => p,
+        _ => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(ApiMessage {
-                    message: format!("插件 '{}' 未找到", plugin_id),
+                    message: "路由未找到".into(),
                 }),
             )
                 .into_response();
         }
     };
-
-    // 插件未启用——路由不可达
-    if !matches!(
-        status,
-        Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
-    ) {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(ApiMessage {
-                message: format!("插件 '{}' 未启用（当前状态: {:?}）", plugin_id, status),
-            }),
-        )
-            .into_response();
-    }
 
     // 构建标准 http::Request<Vec<u8>>
     let path = format!("/{}", route);
