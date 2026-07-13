@@ -1,4 +1,15 @@
 /* plugkit Admin — Ant Design 暗色主题微调 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #000;
+  overflow: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
 #plugin-mount {
   min-height: 400px;
 }
