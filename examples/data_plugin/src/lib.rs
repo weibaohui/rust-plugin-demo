@@ -10,6 +10,7 @@ data_plugin — 数据 CRUD 插件示例。
 
 mod plugin;
 mod trait_impl;
+mod model;
 mod handler;
 mod service;
 mod repository;

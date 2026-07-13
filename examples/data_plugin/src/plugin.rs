@@ -1,16 +1,7 @@
+use crate::model::Item;
 use plugkit::database::DatabaseExt;
 use plugkit::host::HostContext;
 use include_dir::Dir;
-use serde::{Deserialize, Serialize};
-
-/// 数据记录。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct DataRecord {
-    pub(crate) id: i64,
-    pub(crate) title: String,
-    pub(crate) content: String,
-    pub(crate) created_at: String,
-}
 
 #[derive(Debug)]
 pub struct DataPlugin {
@@ -35,11 +26,7 @@ impl DataPlugin {
     }
 
     /// 生成一条模拟数据。
-    pub(crate) fn generate_record(
-        &self,
-        ctx: &dyn HostContext,
-        db: &dyn DatabaseExt,
-    ) -> DataRecord {
+    pub(crate) fn generate_record(&self, ctx: &dyn HostContext, db: &dyn DatabaseExt) -> Item {
         use chrono::Local;
         let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let id = {
@@ -54,7 +41,7 @@ impl DataPlugin {
                 })
                 .unwrap_or(1)
         };
-        DataRecord {
+        Item {
             id,
             title: format!("记录 #{} — 来自 {}", id, ctx.server_name()),
             content: format!("这是由 data_plugin 在 {} 自动生成的示例数据", now),

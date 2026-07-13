@@ -12,7 +12,7 @@ pub fn handle_list_items(
     _req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     match service::list_items(db) {
-        Ok(items) => json_response(StatusCode::OK, &serde_json::json!(items)),
+        Ok(items) => json_response(StatusCode::OK, &serde_json::to_value(items).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }
@@ -28,7 +28,7 @@ pub fn handle_create_item(
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
     match service::create_item(db, &title, &content) {
-        Ok(()) => json_response(StatusCode::CREATED, &serde_json::json!({"message": "创建成功"})),
+        Ok(item) => json_response(StatusCode::CREATED, &serde_json::to_value(item).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }
@@ -48,7 +48,7 @@ pub fn handle_update_item(
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
     match service::update_item(db, id, &title, &content) {
-        Ok(()) => json_response(StatusCode::OK, &serde_json::json!({"message": "更新成功"})),
+        Ok(item) => json_response(StatusCode::OK, &serde_json::to_value(item).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }

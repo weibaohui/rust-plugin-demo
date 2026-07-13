@@ -1,21 +1,21 @@
-//! 业务逻辑层 — 调用 repository，处理校验与转换。
+//! 业务逻辑层 — 调用 repository，基于 `Item` 模型操作。
 
+use crate::model::Item;
 use crate::repository;
 use plugkit::database::DatabaseExt;
 
-/// 获取全部记录（转为 JSON 列表）。
-pub fn list_items(db: &dyn DatabaseExt) -> Result<Vec<serde_json::Value>, String> {
-    let rows = repository::find_all(db)?;
-    let items: Vec<serde_json::Value> = rows.iter().map(|r| repository::row_to_item(r)).collect();
-    Ok(items)
+/// 获取全部记录。
+pub fn list_items(db: &dyn DatabaseExt) -> Result<Vec<Item>, String> {
+    repository::find_all(db)
+}
+
+/// 按 ID 获取记录。
+pub fn get_item(db: &dyn DatabaseExt, id: i64) -> Result<Option<Item>, String> {
+    repository::find_by_id(db, id)
 }
 
 /// 创建记录。
-pub fn create_item(
-    db: &dyn DatabaseExt,
-    title: &str,
-    content: &str,
-) -> Result<(), String> {
+pub fn create_item(db: &dyn DatabaseExt, title: &str, content: &str) -> Result<Item, String> {
     let now = chrono::Local::now()
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
@@ -28,7 +28,7 @@ pub fn update_item(
     id: i64,
     title: &str,
     content: &str,
-) -> Result<(), String> {
+) -> Result<Item, String> {
     repository::update(db, id, title, content)
 }
 
