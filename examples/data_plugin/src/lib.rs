@@ -9,7 +9,9 @@ data_plugin — 数据 CRUD 插件示例。
 */
 
 mod plugin;
+mod trait_impl;
 mod handlers;
+mod metadata;
 
 use plugkit::plugin::PluginRegistrar;
 use std::sync::Arc;
