@@ -48,7 +48,7 @@ pub fn handle_update_item(
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
     match service::update_item(db, id, &title, &content) {
-        Ok(item) => json_response(StatusCode::OK, &serde_json::to_value(item).unwrap()),
+        Ok(()) => json_response(StatusCode::OK, &serde_json::json!({"message": "更新成功"})),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }

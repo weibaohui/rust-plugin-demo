@@ -13,7 +13,6 @@ mod trait_impl;
 mod model;
 mod handler;
 mod service;
-mod repository;
 mod metadata;
 mod routes;
 
