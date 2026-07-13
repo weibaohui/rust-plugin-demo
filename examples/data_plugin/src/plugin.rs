@@ -1,4 +1,4 @@
-use crate::model::Item;
+use crate::model::Model as Item;
 use plugkit::database::DatabaseExt;
 use plugkit::host::HostContext;
 use include_dir::Dir;

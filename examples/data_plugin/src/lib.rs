@@ -15,6 +15,7 @@ mod handler;
 mod service;
 mod metadata;
 mod routes;
+mod db;
 
 use plugkit::plugin::PluginRegistrar;
 use std::sync::Arc;
@@ -34,6 +35,15 @@ pub(crate) const PLUGIN_ID: &str = concat!(
 /// FFI 注册入口 — 宿主加载 dylib 后调用此函数注册插件。
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar) {
+    // 初始化 SeaORM 连接（与宿主共用同一 SQLite 文件）
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let conn = sea_orm::Database::connect("sqlite://plugkit.db?mode=rwc")
+            .await
+            .expect("SeaORM DB connection failed");
+        crate::db::init_connection(conn);
+    });
+
     registrar.register(Arc::new(
         plugin::DataPlugin::new(PLUGIN_ID)
             .with_ui_dist("data_plugin/ui", &UI_DIST),

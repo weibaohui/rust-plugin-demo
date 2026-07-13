@@ -1,47 +1,74 @@
-//! 业务逻辑层 — 基于 `Item` 模型的 CRUD。
+//! 业务逻辑层 — 基于 SeaORM Entity 的 CRUD。
 
-use crate::model::Item;
-use plugkit::database::DatabaseExt;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
+};
+
+use crate::model;
+
+pub type DbConn = DatabaseConnection;
 
 /// 获取全部记录。
-pub fn list_items(db: &dyn DatabaseExt) -> Result<Vec<Item>, String> {
-    Item::find_all(db)
+pub async fn list_items(conn: &DbConn) -> Result<Vec<model::Model>, String> {
+    model::Entity::find()
+        .order_by_desc(model::Column::Id)
+        .all(conn)
+        .await
+        .map_err(|e| format!("查询失败: {}", e))
 }
 
 /// 按 ID 获取记录。
-pub fn get_item(db: &dyn DatabaseExt, id: i64) -> Result<Option<Item>, String> {
-    Item::find_by_id(db, id)
+pub async fn get_item(conn: &DbConn, id: i64) -> Result<Option<model::Model>, String> {
+    model::Entity::find_by_id(id)
+        .one(conn)
+        .await
+        .map_err(|e| format!("查询失败: {}", e))
 }
 
 /// 创建记录。
-pub fn create_item(db: &dyn DatabaseExt, title: &str, content: &str) -> Result<Item, String> {
+pub async fn create_item(conn: &DbConn, title: &str, content: &str) -> Result<model::Model, String> {
     let now = chrono::Local::now()
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
-    let item = Item::new(title, content, &now);
-    item.insert(db)
+
+    let item = model::ActiveModel {
+        title: Set(title.to_string()),
+        content: Set(content.to_string()),
+        created_at: Set(now),
+        ..Default::default()
+    };
+
+    item.insert(conn)
+        .await
+        .map_err(|e| format!("插入失败: {}", e))
 }
 
 /// 更新记录。
-pub fn update_item(db: &dyn DatabaseExt, id: i64, title: &str, content: &str) -> Result<(), String> {
-    let item = Item {
-        id,
-        title: title.to_string(),
-        content: content.to_string(),
-        created_at: String::new(),
+pub async fn update_item(
+    conn: &DbConn,
+    id: i64,
+    title: &str,
+    content: &str,
+) -> Result<model::Model, String> {
+    let item = model::ActiveModel {
+        id: Set(id),
+        title: Set(title.to_string()),
+        content: Set(content.to_string()),
+        ..Default::default()
     };
-    item.update(db)
+
+    item.update(conn)
+        .await
+        .map_err(|e| format!("更新失败: {}", e))
 }
 
 /// 删除记录。
-pub fn delete_item(db: &dyn DatabaseExt, id: i64) -> Result<(), String> {
-    let item = Item {
-        id,
-        title: String::new(),
-        content: String::new(),
-        created_at: String::new(),
-    };
-    item.delete(db)
+pub async fn delete_item(conn: &DbConn, id: i64) -> Result<(), String> {
+    model::Entity::delete_by_id(id)
+        .exec(conn)
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("删除失败: {}", e))
 }
 
 /// 从 "/items/42" 形式的路径中提取 id。
