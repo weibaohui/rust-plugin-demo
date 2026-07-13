@@ -1254,8 +1254,10 @@ async fn handle_plugin_route(
     let ctx = state.read().unwrap();
     let db = ctx.manager.database().clone();
     let plugin = ctx.manager.get(&plugin_id);
+    let status = ctx.manager.plugin_status(&plugin_id);
     drop(ctx);
 
+    // 插件不存在
     let plugin = match plugin {
         Some(p) => p,
         None => {
@@ -1268,6 +1270,20 @@ async fn handle_plugin_route(
                 .into_response();
         }
     };
+
+    // 插件未启用——路由不可达
+    if !matches!(
+        status,
+        Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
+    ) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(ApiMessage {
+                message: format!("插件 '{}' 未启用（当前状态: {:?}）", plugin_id, status),
+            }),
+        )
+            .into_response();
+    }
 
     // 构建标准 http::Request<Vec<u8>>
     let path = format!("/{}", route);
