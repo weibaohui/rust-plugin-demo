@@ -184,6 +184,8 @@ pub struct HostApp {
     pub plugin_search_dirs: Vec<PathBuf>,
     /// 插件间事件总线。
     pub event_bus: crate::event_bus::EventBus,
+    /// 已激活插件的路由注册表 — enable 时注入，disable 时移除。
+    pub active_plugin_routes: HashMap<String, Vec<crate::plugin::PluginRoute>>,
 }
 
 impl Default for HostApp {
@@ -202,6 +204,7 @@ impl HostApp {
             plugin_ui_dirs: HashMap::new(),
             plugin_search_dirs: Vec::new(),
             event_bus: crate::event_bus::EventBus::new(),
+            active_plugin_routes: HashMap::new(),
         }
     }
 
@@ -733,6 +736,9 @@ async fn handle_unload_plugin(
         }
     }
 
+    // 注销路由
+    ctx.active_plugin_routes.remove(&id);
+
     ctx.manager.unload_plugin(&id, keep_data).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -770,6 +776,7 @@ async fn handle_unload_all(State(state): State<SharedState>) -> Json<ApiMessage>
         }
     }
     ctx.library_plugins.clear();
+    ctx.active_plugin_routes.clear();
     ctx.manager.unload_all(false).unwrap_or_default();
     info!("已卸载所有插件");
     Json(ApiMessage {
@@ -786,6 +793,15 @@ async fn handle_enable_plugin(
     ctx.manager
         .enable_plugin(&id)
         .map_err(|e| plugin_err_to_response(e, "启用"))?;
+
+    // 动态注册该插件的路由
+    if let Some(plugin) = ctx.manager.get(&id) {
+        let routes = plugin.routes();
+        if !routes.is_empty() {
+            ctx.active_plugin_routes.insert(id.clone(), routes);
+        }
+    }
+
     info!("已启用插件 '{}'", id);
     Ok(Json(ApiMessage {
         message: format!("插件 '{}' 已启用", id),
@@ -800,6 +816,10 @@ async fn handle_disable_plugin(
     ctx.manager
         .disable_plugin(&id)
         .map_err(|e| plugin_err_to_response(e, "禁用"))?;
+
+    // 动态注销该插件的路由
+    ctx.active_plugin_routes.remove(&id);
+
     if let Some(flags) = ctx.cron_flags.remove(&id) {
         for f in flags {
             f.store(true, Ordering::Relaxed);
@@ -1240,9 +1260,9 @@ pub async fn handle_install_plugin(
 
 /// 处理 `/plugin-api/:plugin_id/*route` catch-all 请求。
 ///
-/// 宿主从 URL 中提取插件 ID，查找对应插件及其 `routes()`，
-/// 按 method + path 匹配到对应 handler 函数指针后调用，
-/// 将 `http::Request<Vec<u8>>` 传入、`http::Response<Vec<u8>>` 转回 axum Response。
+/// 从 `HostApp.active_plugin_routes` 注册表中查找插件路由，
+/// 按 method + path 匹配到对应 handler 函数指针后调用。
+/// 未被注册的路由统一返回 404。
 async fn handle_plugin_route(
     State(state): State<SharedState>,
     Path((plugin_id, route)): Path<(String, String)>,
@@ -1252,14 +1272,14 @@ async fn handle_plugin_route(
     body_bytes: axum::body::Bytes,
 ) -> impl IntoResponse {
     let ctx = state.read().unwrap();
-    let is_active = ctx.manager.is_plugin_active(&plugin_id);
+    let routes = ctx.active_plugin_routes.get(&plugin_id).cloned();
     let db = ctx.manager.database().clone();
     let plugin = ctx.manager.get(&plugin_id);
     drop(ctx);
 
-    // 插件不存在或未启用——路由视作不存在
-    let plugin = match plugin {
-        Some(p) if is_active => p,
+    // 路由未注册（插件不存在或未启用）
+    let (plugin, routes) = match (plugin, routes) {
+        (Some(p), Some(r)) => (p, r),
         _ => {
             return (
                 StatusCode::NOT_FOUND,
@@ -1274,10 +1294,7 @@ async fn handle_plugin_route(
     // 构建标准 http::Request<Vec<u8>>
     let path = format!("/{}", route);
     let http_req = build_http_request(&method, &headers, &path, &query_params, &body_bytes);
-
-    // 遍历 routes，按 method + path 前缀匹配
     let req_path = http_req.uri().path().to_string();
-    let routes = plugin.routes();
 
     for route in &routes {
         if route.method == method && path_prefix_match(&route.path, &req_path) {
