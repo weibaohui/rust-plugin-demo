@@ -11,10 +11,8 @@ data_plugin — 数据 CRUD 插件示例。
 use plugkit::database::DatabaseExt;
 use plugkit::host::HostContext;
 use plugkit::metadata::{CronSpec, PluginMetadata};
-use plugkit::plugin::{
-    Plugin, PluginHttpMethod, PluginRegistrar, PluginRouteDef, PluginRouteRequest,
-    PluginRouteResponse,
-};
+use plugkit::plugin::{Plugin, PluginRegistrar, PluginRoute};
+use http::{Method, StatusCode};
 use include_dir::{include_dir, Dir};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -162,148 +160,162 @@ impl Plugin for DataPlugin {
         self.ui_dist
     }
 
-    fn routes(&self) -> Vec<PluginRouteDef> {
+    fn routes(&self) -> Vec<PluginRoute> {
         vec![
-            PluginRouteDef {
-                method: PluginHttpMethod::GET,
+            PluginRoute {
+                method: Method::GET,
                 path: "/items".into(),
+                handler: handle_list_items,
             },
-            PluginRouteDef {
-                method: PluginHttpMethod::POST,
+            PluginRoute {
+                method: Method::POST,
                 path: "/items".into(),
+                handler: handle_create_item,
             },
-            PluginRouteDef {
-                method: PluginHttpMethod::PUT,
-                path: "/items/:id".into(),
+            PluginRoute {
+                method: Method::PUT,
+                path: "/items".into(),
+                handler: handle_update_item,
             },
-            PluginRouteDef {
-                method: PluginHttpMethod::DELETE,
-                path: "/items/:id".into(),
+            PluginRoute {
+                method: Method::DELETE,
+                path: "/items".into(),
+                handler: handle_delete_item,
             },
         ]
     }
+}
 
-    fn handle_route(
-        &self,
-        req: &PluginRouteRequest,
-        db: &dyn DatabaseExt,
-    ) -> PluginRouteResponse {
-        use plugkit::database::DbValue;
+// ------------------------------------------------------------------------------------------------
+// 路由 handler 函数（一个功能一个方法）
+// ------------------------------------------------------------------------------------------------
 
-        let path = req.path.as_str();
-
-        // GET /items — 列表
-        if req.http_method == PluginHttpMethod::GET && path == "/items" {
-            match db.query(
-                "SELECT id, title, content, created_at FROM data_items ORDER BY id DESC",
-            ) {
-                Ok(rows) => {
-                    let items: Vec<serde_json::Value> = rows
-                        .iter()
-                        .map(|row| {
-                            serde_json::json!({
-                                "id": to_json_val(row.get(0)),
-                                "title": to_json_val(row.get(1)),
-                                "content": to_json_val(row.get(2)),
-                                "created_at": to_json_val(row.get(3)),
-                            })
-                        })
-                        .collect();
-                    PluginRouteResponse::ok(serde_json::json!(items))
-                }
-                Err(e) => PluginRouteResponse::internal_error(&format!("查询失败: {}", e)),
-            }
+/// GET /items — 列出所有数据记录。
+fn handle_list_items(
+    _plugin: &dyn Plugin,
+    db: &dyn DatabaseExt,
+    _req: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>> {
+    match db.query("SELECT id, title, content, created_at FROM data_items ORDER BY id DESC") {
+        Ok(rows) => {
+            let items: Vec<serde_json::Value> = rows
+                .iter()
+                .map(|row| {
+                    serde_json::json!({
+                        "id": to_json_val(row.get(0)),
+                        "title": to_json_val(row.get(1)),
+                        "content": to_json_val(row.get(2)),
+                        "created_at": to_json_val(row.get(3)),
+                    })
+                })
+                .collect();
+            json_response(StatusCode::OK, &serde_json::json!(items))
         }
-        // POST /items — 创建
-        else if req.http_method == PluginHttpMethod::POST && path == "/items" {
-            let body = match &req.body_json {
-                Some(b) => b,
-                None => {
-                    return PluginRouteResponse {
-                        status: 400,
-                        body_json: serde_json::json!({"error": "缺少请求体"}),
-                    }
-                }
-            };
-            let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("");
-            let content = body.get("content").and_then(|v| v.as_str()).unwrap_or("");
-            let now = chrono::Local::now()
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string();
-            match db.execute_with(
-                "INSERT INTO data_items (title, content, created_at) VALUES (?1, ?2, ?3)",
-                &[
-                    DbValue::Text(title.to_string()),
-                    DbValue::Text(content.to_string()),
-                    DbValue::Text(now),
-                ],
-            ) {
-                Ok(_) => PluginRouteResponse::ok(serde_json::json!({"message": "创建成功"})),
-                Err(e) => {
-                    PluginRouteResponse::internal_error(&format!("插入失败: {}", e))
-                }
-            }
-        }
-        // PUT /items/:id — 更新
-        else if req.http_method == PluginHttpMethod::PUT && path.starts_with("/items/") {
-            let id: i64 = match parse_id(path) {
-                Some(id) => id,
-                None => {
-                    return PluginRouteResponse {
-                        status: 400,
-                        body_json: serde_json::json!({"error": "无效的ID"}),
-                    }
-                }
-            };
-            let body = match &req.body_json {
-                Some(b) => b,
-                None => {
-                    return PluginRouteResponse {
-                        status: 400,
-                        body_json: serde_json::json!({"error": "缺少请求体"}),
-                    }
-                }
-            };
-            let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("");
-            let content = body.get("content").and_then(|v| v.as_str()).unwrap_or("");
-            match db.execute_with(
-                "UPDATE data_items SET title = ?1, content = ?2 WHERE id = ?3",
-                &[
-                    DbValue::Text(title.to_string()),
-                    DbValue::Text(content.to_string()),
-                    DbValue::Int(id),
-                ],
-            ) {
-                Ok(_) => PluginRouteResponse::ok(serde_json::json!({"message": "更新成功"})),
-                Err(e) => {
-                    PluginRouteResponse::internal_error(&format!("更新失败: {}", e))
-                }
-            }
-        }
-        // DELETE /items/:id — 删除
-        else if req.http_method == PluginHttpMethod::DELETE && path.starts_with("/items/") {
-            let id: i64 = match parse_id(path) {
-                Some(id) => id,
-                None => {
-                    return PluginRouteResponse {
-                        status: 400,
-                        body_json: serde_json::json!({"error": "无效的ID"}),
-                    }
-                }
-            };
-            match db.execute_with(
-                "DELETE FROM data_items WHERE id = ?1",
-                &[DbValue::Int(id)],
-            ) {
-                Ok(_) => PluginRouteResponse::ok(serde_json::json!({"message": "删除成功"})),
-                Err(e) => {
-                    PluginRouteResponse::internal_error(&format!("删除失败: {}", e))
-                }
-            }
-        } else {
-            PluginRouteResponse::not_found()
-        }
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("查询失败: {}", e)),
     }
+}
+
+/// POST /items — 创建一条数据记录。
+fn handle_create_item(
+    _plugin: &dyn Plugin,
+    db: &dyn DatabaseExt,
+    req: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>> {
+    let body: serde_json::Value = match serde_json::from_slice(req.body()) {
+        Ok(v) => v,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
+    };
+    let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("");
+    let content = body.get("content").and_then(|v| v.as_str()).unwrap_or("");
+
+    let now = chrono::Local::now()
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+
+    use plugkit::database::DbValue;
+    match db.execute_with(
+        "INSERT INTO data_items (title, content, created_at) VALUES (?1, ?2, ?3)",
+        &[
+            DbValue::Text(title.to_string()),
+            DbValue::Text(content.to_string()),
+            DbValue::Text(now),
+        ],
+    ) {
+        Ok(_) => json_response(StatusCode::CREATED, &serde_json::json!({"message": "创建成功"})),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("插入失败: {}", e)),
+    }
+}
+
+/// PUT /items — 更新一条数据记录（ID 从 URI 路径中提取）。
+fn handle_update_item(
+    _plugin: &dyn Plugin,
+    db: &dyn DatabaseExt,
+    req: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>> {
+    let id: i64 = match parse_id(req.uri().path()) {
+        Some(id) => id,
+        None => return error_response(StatusCode::BAD_REQUEST, "无效的ID"),
+    };
+    let body: serde_json::Value = match serde_json::from_slice(req.body()) {
+        Ok(v) => v,
+        Err(_) => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
+    };
+    let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("");
+    let content = body.get("content").and_then(|v| v.as_str()).unwrap_or("");
+
+    use plugkit::database::DbValue;
+    match db.execute_with(
+        "UPDATE data_items SET title = ?1, content = ?2 WHERE id = ?3",
+        &[
+            DbValue::Text(title.to_string()),
+            DbValue::Text(content.to_string()),
+            DbValue::Int(id),
+        ],
+    ) {
+        Ok(_) => json_response(StatusCode::OK, &serde_json::json!({"message": "更新成功"})),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("更新失败: {}", e)),
+    }
+}
+
+/// DELETE /items — 删除一条数据记录（ID 从 URI 路径中提取）。
+fn handle_delete_item(
+    _plugin: &dyn Plugin,
+    db: &dyn DatabaseExt,
+    req: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>> {
+    let id: i64 = match parse_id(req.uri().path()) {
+        Some(id) => id,
+        None => return error_response(StatusCode::BAD_REQUEST, "无效的ID"),
+    };
+
+    use plugkit::database::DbValue;
+    match db.execute_with("DELETE FROM data_items WHERE id = ?1", &[DbValue::Int(id)]) {
+        Ok(_) => json_response(StatusCode::OK, &serde_json::json!({"message": "删除成功"})),
+        Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &format!("删除失败: {}", e)),
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// 辅助函数
+// ------------------------------------------------------------------------------------------------
+
+/// 构建 JSON 成功响应。
+fn json_response(status: StatusCode, body: &serde_json::Value) -> http::Response<Vec<u8>> {
+    http::Response::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(serde_json::to_vec(body).unwrap())
+        .unwrap()
+}
+
+/// 构建 JSON 错误响应。
+fn error_response(status: StatusCode, msg: &str) -> http::Response<Vec<u8>> {
+    let body = serde_json::json!({"error": msg});
+    http::Response::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(serde_json::to_vec(&body).unwrap())
+        .unwrap()
 }
 
 /// 将 DbValue 转为 serde_json::Value。

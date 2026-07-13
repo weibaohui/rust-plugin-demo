@@ -1240,19 +1240,17 @@ pub async fn handle_install_plugin(
 
 /// 处理 `/plugin-api/:plugin_id/*route` catch-all 请求。
 ///
-/// 宿主从 URL 中提取插件 ID 和剩余路径，查找对应插件，
-/// 封装 `PluginRouteRequest` 后调用 `plugin.handle_route()`，
-/// 将返回的 `PluginRouteResponse` 转为 axum Response。
+/// 宿主从 URL 中提取插件 ID，查找对应插件及其 `routes()`，
+/// 按 method + path 匹配到对应 handler 函数指针后调用，
+/// 将 `http::Request<Vec<u8>>` 传入、`http::Response<Vec<u8>>` 转回 axum Response。
 async fn handle_plugin_route(
     State(state): State<SharedState>,
     Path((plugin_id, route)): Path<(String, String)>,
     method: Method,
+    headers: axum::http::HeaderMap,
     axum::extract::Query(query_params): axum::extract::Query<HashMap<String, String>>,
     body_bytes: axum::body::Bytes,
 ) -> impl IntoResponse {
-    use crate::plugin::{PluginHttpMethod, PluginRouteRequest};
-
-    // 从 HostApp 中获取 PluginManager 的数据库和插件
     let ctx = state.read().unwrap();
     let db = ctx.manager.database().clone();
     let plugin = ctx.manager.get(&plugin_id);
@@ -1271,41 +1269,68 @@ async fn handle_plugin_route(
         }
     };
 
-    // 解析 HTTP 方法
-    let http_method = match method {
-        Method::GET => PluginHttpMethod::GET,
-        Method::POST => PluginHttpMethod::POST,
-        Method::PUT => PluginHttpMethod::PUT,
-        Method::DELETE => PluginHttpMethod::DELETE,
-        Method::PATCH => PluginHttpMethod::PATCH,
-        _ => PluginHttpMethod::GET,
-    };
-
-    // 构造请求路径（恢复前导 /）
+    // 构建标准 http::Request<Vec<u8>>
     let path = format!("/{}", route);
+    let http_req = build_http_request(&method, &headers, &path, &query_params, &body_bytes);
 
-    // 解析 body 为 JSON（可选）
-    let body_json = if body_bytes.is_empty() {
-        None
-    } else {
-        serde_json::from_slice(&body_bytes).ok()
-    };
+    // 遍历 routes，按 method + path 前缀匹配
+    let req_path = http_req.uri().path().to_string();
+    let routes = plugin.routes();
 
-    // 调用插件处理器
-    let db_ref: &dyn DatabaseExt = db.as_deref().unwrap_or(&crate::manager::NoopDatabase);
-    let resp = plugin.handle_route(
-        &PluginRouteRequest {
-            http_method,
-            path,
-            query_params,
-            body_json,
-        },
-        db_ref,
-    );
+    for route in &routes {
+        if route.method == method && path_prefix_match(&route.path, &req_path) {
+            let db_ref: &dyn DatabaseExt = db.as_deref().unwrap_or(&crate::manager::NoopDatabase);
+            let resp = (route.handler)(plugin.as_ref(), db_ref, http_req);
+            return convert_http_response(resp);
+        }
+    }
 
-    // 转为 axum Response
-    let status = StatusCode::from_u16(resp.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-    (status, Json(resp.body_json)).into_response()
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({"error": "路由未找到", "path": req_path})),
+    )
+        .into_response()
+}
+
+/// 检查请求路径是否匹配路由声明的路径（支持前缀匹配）。
+fn path_prefix_match(route_path: &str, req_path: &str) -> bool {
+    req_path == route_path || req_path.starts_with(&format!("{}/", route_path))
+}
+
+/// 从 axum 的请求组件构建标准 `http::Request<Vec<u8>>`。
+fn build_http_request(
+    method: &Method,
+    headers: &axum::http::HeaderMap,
+    path: &str,
+    query_params: &HashMap<String, String>,
+    body_bytes: &[u8],
+) -> http::Request<Vec<u8>> {
+    // 构建 URI（含查询参数）
+    let mut uri = path.to_string();
+    if !query_params.is_empty() {
+        let qs: Vec<String> = query_params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect();
+        uri.push('?');
+        uri.push_str(&qs.join("&"));
+    }
+
+    let mut builder = http::Request::builder().method(method.clone()).uri(&uri);
+    for (key, value) in headers.iter() {
+        builder = builder.header(key, value);
+    }
+    builder.body(body_bytes.to_vec()).unwrap()
+}
+
+/// 将 `http::Response<Vec<u8>>` 转为 axum Response。
+fn convert_http_response(resp: http::Response<Vec<u8>>) -> axum::response::Response {
+    let (parts, body) = resp.into_parts();
+    let mut builder = axum::response::Response::builder().status(parts.status);
+    for (key, value) in parts.headers.iter() {
+        builder = builder.header(key, value);
+    }
+    builder.body(Body::from(body)).unwrap()
 }
 
 // ------------------------------------------------------------------------------------------------

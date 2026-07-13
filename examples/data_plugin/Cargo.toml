@@ -10,6 +10,7 @@ crate-type = ["dylib"]
 
 [dependencies]
 plugkit = { version = "0.2", path = "../.." }
+http = "1"
 include_dir = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -121,61 +121,26 @@ pub use crate::metadata::CronSpec;
 // 插件 HTTP 路由类型
 // ------------------------------------------------------------------------------------------------
 
-/// HTTP 请求方法。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PluginHttpMethod {
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    PATCH,
-}
+/// 路由 handler 函数指针签名。
+///
+/// 参数:
+/// - `plugin` — 插件实例引用
+/// - `db` — 宿主数据库接口
+/// - `req` — 标准 HTTP 请求 (body 为 `Vec<u8>`)
+///
+/// 返回标准 HTTP 响应 (body 为 `Vec<u8>`)。
+pub type PluginRouteHandler = fn(
+    plugin: &dyn Plugin,
+    db: &dyn DatabaseExt,
+    req: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>>;
 
-/// 插件路由定义 — 插件声明自己支持的 HTTP 端点。
+/// 插件路由定义 — 一个功能一个 handler。
 #[derive(Debug, Clone)]
-pub struct PluginRouteDef {
-    pub method: PluginHttpMethod,
+pub struct PluginRoute {
+    pub method: http::Method,
     pub path: String, // 插件命名空间下的相对路径，如 "/items"、"/items/:id"
-}
-
-/// HTTP 请求上下文 — 宿主将 axum 请求信息封装后传给插件。
-#[derive(Debug)]
-pub struct PluginRouteRequest {
-    pub http_method: PluginHttpMethod,
-    pub path: String,
-    pub query_params: std::collections::HashMap<String, String>,
-    pub body_json: Option<serde_json::Value>,
-}
-
-/// HTTP 响应 — 插件返回给宿主，宿主转为 axum Response。
-#[derive(Debug)]
-pub struct PluginRouteResponse {
-    pub status: u16,
-    pub body_json: serde_json::Value,
-}
-
-impl PluginRouteResponse {
-    /// 创建 200 OK 响应。
-    pub fn ok(body: serde_json::Value) -> Self {
-        Self {
-            status: 200,
-            body_json: body,
-        }
-    }
-    /// 创建 404 Not Found 响应。
-    pub fn not_found() -> Self {
-        Self {
-            status: 404,
-            body_json: serde_json::json!({"error": "not found"}),
-        }
-    }
-    /// 创建 500 Internal Server Error 响应。
-    pub fn internal_error(msg: &str) -> Self {
-        Self {
-            status: 500,
-            body_json: serde_json::json!({"error": msg}),
-        }
-    }
+    pub handler: PluginRouteHandler,
 }
 
 ///
@@ -305,26 +270,14 @@ pub trait Plugin: Debug + Sync + Send {
         Ok(())
     }
 
-    /// 声明插件的 HTTP 路由列表（供宿主生成文档 / 校验）。
+    /// 声明插件的 HTTP 路由列表 — 一个功能一个 handler。
     ///
     /// 路由挂载在 `/plugin-api/<plugin-id>/` 命名空间下，
-    /// 此处声明的 `path` 为相对于该命名空间的路径，如 `"/items"`、`"/items/:id"`。
+    /// `path` 为相对于该命名空间的路径，如 `"/items"`、`"/items/:id"`。
+    /// 每个 `PluginRoute` 包含一个独立的 handler 函数指针。
     /// 默认返回空列表。
-    fn routes(&self) -> Vec<PluginRouteDef> {
+    fn routes(&self) -> Vec<PluginRoute> {
         vec![]
-    }
-
-    /// 处理 HTTP 请求 — 插件自治地处理所有路由逻辑。
-    ///
-    /// `req` 中包含 HTTP 方法、剩余路径、查询参数和请求体 JSON。
-    /// `db` 为宿主传递的数据库操作接口。
-    /// 默认返回 404。
-    fn handle_route(
-        &self,
-        _req: &PluginRouteRequest,
-        _db: &dyn DatabaseExt,
-    ) -> PluginRouteResponse {
-        PluginRouteResponse::not_found()
     }
 }
 
