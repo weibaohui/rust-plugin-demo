@@ -18,7 +18,7 @@ interface PanelProps {
   pluginId?: string;
 }
 
-function PanelContent({ pluginId = 'data_plugin::data_plugin::DataPlugin' }: PanelProps): ReactNode {
+function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): ReactNode {
   const apiBase = useMemo(() => `/plugin-api/${pluginId}/items`, [pluginId]);
 
   const [data, setData] = useState<DataRow[]>([]);

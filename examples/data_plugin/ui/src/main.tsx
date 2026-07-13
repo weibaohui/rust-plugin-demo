@@ -14,7 +14,7 @@ function render(props: Record<string, unknown> = {}) {
   root.render(
     <StrictMode>
       <Panel
-        pluginId={typeof props.pluginId === 'string' ? (props.pluginId as string) : 'data_plugin::data_plugin::DataPlugin'}
+        pluginId={typeof props.pluginId === 'string' ? (props.pluginId as string) : 'data_plugin.DataPlugin'}
       />
     </StrictMode>,
   );

@@ -24,13 +24,7 @@ use std::sync::Arc;
 pub static UI_DIST: include_dir::Dir<'static> =
     include_dir::include_dir!("$CARGO_MANIFEST_DIR/ui/dist");
 
-pub(crate) const PLUGIN_ID: &str = concat!(
-    env!("CARGO_PKG_NAME"),
-    "::",
-    module_path!(),
-    "::",
-    "DataPlugin",
-);
+pub(crate) const PLUGIN_ID: &str = "data_plugin.DataPlugin";
 
 /// FFI 注册入口 — 宿主加载 dylib 后调用此函数注册插件。
 #[no_mangle]
