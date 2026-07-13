@@ -29,9 +29,9 @@ pub(crate) const PLUGIN_ID: &str = "data_plugin.DataPlugin";
 /// FFI 注册入口 — 宿主加载 dylib 后调用此函数注册插件。
 #[no_mangle]
 pub extern "C" fn register_plugins(registrar: &mut PluginRegistrar) {
-    // 初始化 SeaORM 连接（与宿主共用同一 SQLite 文件）
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
+    // 初始化独立 runtime 及 SeaORM 连接（与宿主共用同一 SQLite 文件）
+    crate::db::init_runtime();
+    crate::db::block_on(async {
         let conn = sea_orm::Database::connect("sqlite://plugkit.db?mode=rwc")
             .await
             .expect("SeaORM DB connection failed");

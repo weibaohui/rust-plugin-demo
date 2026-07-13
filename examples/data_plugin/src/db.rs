@@ -1,12 +1,23 @@
 //! SeaORM 数据库连接管理。
+//!
+//! data_plugin 拥有独立的 tokio runtime，不依赖宿主运行时。
 
 use sea_orm::DatabaseConnection;
 use std::future::Future;
 use std::sync::OnceLock;
+use tokio::runtime::Runtime;
 
+static ASYNC_RT: OnceLock<Runtime> = OnceLock::new();
 static DB_CONN: OnceLock<DatabaseConnection> = OnceLock::new();
 
-/// 初始化 SeaORM 连接（在插件加载时调用一次）。
+/// 初始化独立 tokio runtime（在 `register_plugins` 中调用）。
+pub fn init_runtime() {
+    ASYNC_RT
+        .set(Runtime::new().expect("data_plugin: failed to create tokio runtime"))
+        .ok();
+}
+
+/// 初始化 SeaORM 连接。
 pub fn init_connection(conn: DatabaseConnection) {
     let _ = DB_CONN.set(conn);
 }
@@ -16,7 +27,10 @@ pub fn connection() -> &'static DatabaseConnection {
     DB_CONN.get().expect("SeaORM connection not initialized")
 }
 
-/// 在 tokio 异步上下文中调用同步 handler 时，安全地阻塞等待一个 Future。
+/// 在独立 runtime 上阻塞等待一个 Future。
 pub fn block_on<F: Future>(f: F) -> F::Output {
-    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(f))
+    ASYNC_RT
+        .get()
+        .expect("data_plugin: async runtime not initialized")
+        .block_on(f)
 }
