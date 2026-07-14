@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { ConfigProvider, Layout, theme, Menu, Card, Button, Tag, Popconfirm, Space, Typography, Alert, Divider, App as AntApp } from 'antd';
+import { ConfigProvider, Layout, theme, Menu, Card, Button, Tag, Popconfirm, Space, Typography, Alert, App as AntApp } from 'antd';
 import {
   ApiOutlined, FolderOpenOutlined, DownloadOutlined, ReloadOutlined,
   DeleteOutlined, PlayCircleOutlined, PauseCircleOutlined,
@@ -229,23 +229,18 @@ export default function App(): ReactNode {
     content = (
       <Card title={<><ApiOutlined /> 已加载的插件 ({plugins.length})</>}
         extra={<Space>{plugins.length > 0 && <Button danger icon={<DeleteOutlined />} onClick={handleUnloadAll}>卸载全部</Button>}</Space>}>
-        <Card size="small" style={{ marginBottom: 16, background: '#1a1a2e' }}>
-          <Space wrap size={[6, 8]} style={{ width: '100%' }}>
-            <Text strong style={{ fontSize: 13, color: '#1677ff' }}>操作</Text>
+        <Card size="small" style={{ marginBottom: 16 }}>
+          <Space wrap size={[4, 6]}>
             <Tag color="default">已加载</Tag>
-            <Tag color="cyan" style={{ fontWeight: 700 }}>启用</Tag>
+            <Tag style={{ background: '#1677ff', color: '#fff', border: 'none' }}>启用</Tag>
             <Tag color="processing">已启用</Tag>
-            <Tag color="cyan" style={{ fontWeight: 700 }}>启动</Tag>
+            <Tag style={{ background: '#1677ff', color: '#fff', border: 'none' }}>启动</Tag>
             <Tag color="success">运行中</Tag>
-            <Tag color="cyan" style={{ fontWeight: 700 }}>停止</Tag>
+            <Tag style={{ background: '#1677ff', color: '#fff', border: 'none' }}>停止</Tag>
             <Tag color="processing">已启用</Tag>
-            <Tag color="cyan" style={{ fontWeight: 700 }}>禁用</Tag>
+            <Tag style={{ background: '#1677ff', color: '#fff', border: 'none' }}>禁用</Tag>
             <Tag color="default">已加载</Tag>
-            <Tag color="volcano" style={{ fontWeight: 700 }}>卸载</Tag>
-            <Divider type="vertical" />
-            <Text strong style={{ fontSize: 13, color: '#faad14' }}>说明</Text>
-            <Tag color="cyan">▸</Tag><Text type="secondary" style={{ fontSize: 12 }}>用户操作</Text>
-            <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>其余为插件状态（颜色与卡片一致）</Text>
+            <Tag style={{ background: '#ff4d4f', color: '#fff', border: 'none' }}>卸载</Tag>
           </Space>
         </Card>
         {plugins.length === 0 ? (
