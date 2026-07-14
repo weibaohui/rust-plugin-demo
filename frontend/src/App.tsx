@@ -229,7 +229,7 @@ export default function App(): ReactNode {
     content = (
       <Card title={<><ApiOutlined /> 已加载的插件 ({plugins.length})</>}
         extra={<Space>{plugins.length > 0 && <Button danger icon={<DeleteOutlined />} onClick={handleUnloadAll}>卸载全部</Button>}</Space>}>
-        <Alert message="状态流转: load → Loaded(已加载) → enable → Enabled(已启用,菜单可见) → start → Running(运行中,cron 调度) → stop → Enabled → disable → Loaded → unload → 移除" type="info" showIcon style={{ marginBottom: 16 }} />
+        <Alert message="操作指引: 加载 → 已加载 → [启用] → 已启用(菜单可见) → [启动] → 运行中(cron调度) → [停止] → 已启用 → [禁用] → 已加载 → [卸载]" type="info" showIcon style={{ marginBottom: 16 }} />
         {plugins.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
