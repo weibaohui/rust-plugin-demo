@@ -23,7 +23,10 @@ export interface PluginInfo {
   id: string;
   name: string;
   version: string;
+  author: string;
+  description: string;
   has_ui: boolean;
+  has_cron: boolean;
   /** qiankun 子应用入口相对路径 */
   ui_entry: string | null;
   /** qiankun 子应用入口绝对 URL（由 micro.ts 填充） */

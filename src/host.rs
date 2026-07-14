@@ -478,8 +478,14 @@ pub struct PluginInfo {
     pub name: String,
     /// 版本（来自 `metadata().version`）。
     pub version: String,
+    /// 作者（来自 `metadata().author`）。
+    pub author: String,
+    /// 功能描述（来自 `metadata().description`）。
+    pub description: String,
     /// 是否有嵌入的 UI。
     pub has_ui: bool,
+    /// 是否声明了定时任务（cron）。
+    pub has_cron: bool,
     /// qiankun 子应用入口 URL（`has_ui` 为 false 时为 None）。
     pub ui_entry: Option<String>,
     /// 插件声明的菜单树。
@@ -497,6 +503,9 @@ pub struct PluginInfo {
 /// 菜单仅在 `Enabled` / `Running` 状态下对外暴露。
 pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
     let meta = p.metadata();
+    let author = meta.author.clone().unwrap_or_default();
+    let description = meta.description.clone().unwrap_or_default();
+    let has_cron = !meta.crons().is_empty();
     // 仅在启用/运行状态下暴露菜单
     let menu = if matches!(status, PluginStatus::Enabled | PluginStatus::Running) {
         meta.menus().to_vec()
@@ -507,7 +516,10 @@ pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
         id: p.plugin_id().clone(),
         name: meta.title,
         version: meta.version,
+        author,
+        description,
         has_ui: p.has_ui(),
+        has_cron,
         ui_entry: p
             .ui_base_dir()
             .map(|d| format!("/plugin-files/{}/dist/index.html", d)),

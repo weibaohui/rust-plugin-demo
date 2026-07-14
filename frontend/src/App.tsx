@@ -6,7 +6,7 @@ import {
   DeleteOutlined, PlayCircleOutlined, PauseCircleOutlined,
   CaretUpOutlined, CaretDownOutlined
 } from '@ant-design/icons';
-import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
+import type { PluginInfo, LibraryInfo, PluginMenu, PluginStatus } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 
@@ -27,6 +27,15 @@ function navigate(to: string): void {
   if (window.location.pathname !== to) {
     window.history.pushState({}, '', to);
     window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+}
+
+function statusLabel(s: PluginStatus): string {
+  switch (s) {
+    case 'Loaded': return '已加载（未启用）';
+    case 'Enabled': return '已启用（菜单可见）';
+    case 'Running': return '运行中（cron 调度）';
+    default: return s;
   }
 }
 
@@ -220,7 +229,7 @@ export default function App(): ReactNode {
     content = (
       <Card title={<><ApiOutlined /> 已加载的插件 ({plugins.length})</>}
         extra={<Space>{plugins.length > 0 && <Button danger icon={<DeleteOutlined />} onClick={handleUnloadAll}>卸载全部</Button>}</Space>}>
-        <Alert message="load → Loaded → enable → Enabled(菜单可见) → start → Running(cron 运行) → stop → Enabled → disable → Loaded → unload → 移除" type="info" showIcon style={{ marginBottom: 16 }} />
+        <Alert message="状态流转: load → Loaded(已加载) → enable → Enabled(已启用,菜单可见) → start → Running(运行中,cron 调度) → stop → Enabled → disable → Loaded → unload → 移除" type="info" showIcon style={{ marginBottom: 16 }} />
         {plugins.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
@@ -244,11 +253,21 @@ export default function App(): ReactNode {
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Space>
                       <Text strong>{p.name}</Text>
-                      <Tag color={statusColor}>{p.status === 'Running' ? '运行中' : p.status === 'Enabled' ? '已启用' : '已加载'}</Tag>
-                      <Text code>{p.version}</Text>
+                      <Tag color={statusColor}>{statusLabel(p.status)}</Tag>
+                      <Text code>v{p.version}</Text>
                     </Space>
-                    <Space><Text type="secondary" style={{ fontSize: 12 }}>ID:</Text><Text code style={{ fontSize: 12 }}>{p.id}</Text></Space>
-                    <Space><Text type="secondary" style={{ fontSize: 12 }}>UI:</Text><Text style={{ fontSize: 12 }}>{p.has_ui ? '✅ 已嵌入' : '—'}</Text></Space>
+                    {p.author && <Text type="secondary" style={{ fontSize: 12 }}>作者: {p.author}</Text>}
+                    {p.description && <Text type="secondary" style={{ fontSize: 12 }} ellipsis>{p.description}</Text>}
+                    <Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>ID:</Text>
+                      <Text code style={{ fontSize: 12 }}>{p.id}</Text>
+                    </Space>
+                    <Space>
+                      <Text type="secondary" style={{ fontSize: 12 }}>UI:</Text>
+                      <Text style={{ fontSize: 12 }}>{p.has_ui ? '✅ 已嵌入' : '—'}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Cron:</Text>
+                      <Text style={{ fontSize: 12 }}>{p.has_cron ? '⏰ 已配置' : '—'}</Text>
+                    </Space>
                   </Space>
                 </Card>
               );
