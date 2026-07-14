@@ -229,7 +229,29 @@ export default function App(): ReactNode {
     content = (
       <Card title={<><ApiOutlined /> 已加载的插件 ({plugins.length})</>}
         extra={<Space>{plugins.length > 0 && <Button danger icon={<DeleteOutlined />} onClick={handleUnloadAll}>卸载全部</Button>}</Space>}>
-        <Alert message="操作指引: 加载 → 已加载 → [启用] → 已启用(菜单可见) → [启动] → 运行中(cron调度) → [停止] → 已启用 → [禁用] → 已加载 → [卸载]" type="info" showIcon style={{ marginBottom: 16 }} />
+        <Card size="small" style={{ marginBottom: 16, background: '#1a1a2e' }}>
+          <Space wrap size={[2, 4]}>
+            <Text type="secondary" style={{ fontSize: 12 }}>操作指引:</Text>
+            <Tag color="default">已加载</Tag><Text type="secondary"> → </Text>
+            <Tag color="blue">启用</Tag><Text type="secondary"> → </Text>
+            <Tag color="processing">已启用</Tag><Text type="secondary"> → </Text>
+            <Tag color="blue">启动</Tag><Text type="secondary"> → </Text>
+            <Tag color="success">运行中</Tag><Text type="secondary"> → </Text>
+            <Tag color="blue">停止</Tag><Text type="secondary"> → </Text>
+            <Tag color="processing">已启用</Tag><Text type="secondary"> → </Text>
+            <Tag color="blue">禁用</Tag><Text type="secondary"> → </Text>
+            <Tag color="default">已加载</Tag><Text type="secondary"> → </Text>
+            <Tag color="red">卸载</Tag>
+          </Space>
+          <div style={{ marginTop: 6 }}>
+            <Space size={4}>
+              <Tag color="blue" style={{ fontSize: 10 }}>按钮</Tag>
+              <Text type="secondary" style={{ fontSize: 11 }}>= 用户操作</Text>
+              <Tag color="processing" style={{ fontSize: 10 }}>状态</Tag>
+              <Text type="secondary" style={{ fontSize: 11 }}>= 插件当前生命周期状态</Text>
+            </Space>
+          </div>
+        </Card>
         {plugins.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>📭</div>
