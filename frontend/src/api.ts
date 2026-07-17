@@ -27,6 +27,8 @@ export interface PluginInfo {
   description: string;
   has_ui: boolean;
   has_cron: boolean;
+  /** 是否使用了数据库表（metadata.tables 非空） */
+  has_database: boolean;
   /** qiankun 子应用入口相对路径 */
   ui_entry: string | null;
   /** qiankun 子应用入口绝对 URL（由 micro.ts 填充） */

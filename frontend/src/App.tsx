@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, ReactElement } from 'react';
 import { ConfigProvider, Layout, theme, Menu, Card, Button, Tag, Popconfirm, Space, Typography, Alert, App as AntApp } from 'antd';
 import {
   ApiOutlined, FolderOpenOutlined, DownloadOutlined, ReloadOutlined,
   DeleteOutlined, PlayCircleOutlined, PauseCircleOutlined,
   CaretUpOutlined, CaretDownOutlined
 } from '@ant-design/icons';
-import type { PluginInfo, LibraryInfo, PluginMenu, PluginStatus } from './api';
+import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 
@@ -30,13 +30,11 @@ function navigate(to: string): void {
   }
 }
 
-function statusLabel(s: PluginStatus): string {
-  switch (s) {
-    case 'Loaded': return '已加载（未启用）';
-    case 'Enabled': return '已启用（菜单可见）';
-    case 'Running': return '运行中（cron 调度）';
-    default: return s;
-  }
+/** 固定显示的是/否徽标：始终可见，根据布尔值切换文案与颜色。 */
+function YesNo({ value }: { value: boolean }): ReactElement {
+  return value
+    ? <Tag color="success" style={{ fontSize: 12 }}>✅ 是</Tag>
+    : <Tag style={{ fontSize: 12 }}>⭕ 否</Tag>;
 }
 
 const hostMenus: PluginMenu[] = [
@@ -237,7 +235,6 @@ export default function App(): ReactNode {
         ) : (
           <Space direction="vertical" style={{ width: '100%' }}>
             {plugins.map(p => {
-              const statusColor = p.status === 'Running' ? 'success' : p.status === 'Enabled' ? 'processing' : 'default';
               return (
                 <Card key={p.id} size="small" hoverable
                   actions={[
@@ -252,7 +249,6 @@ export default function App(): ReactNode {
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Space>
                       <Text strong>{p.name}</Text>
-                      <Tag color={statusColor}>{statusLabel(p.status)}</Tag>
                       <Text code>v{p.version}</Text>
                     </Space>
                     {p.author && <Text type="secondary" style={{ fontSize: 12 }}>作者: {p.author}</Text>}
@@ -261,11 +257,23 @@ export default function App(): ReactNode {
                       <Text type="secondary" style={{ fontSize: 12 }}>ID:</Text>
                       <Text code style={{ fontSize: 12 }}>{p.id}</Text>
                     </Space>
-                    <Space>
-                      <Text type="secondary" style={{ fontSize: 12 }}>UI:</Text>
-                      <Text style={{ fontSize: 12 }}>{p.has_ui ? '✅ 已嵌入' : '—'}</Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>Cron:</Text>
-                      <Text style={{ fontSize: 12 }}>{p.has_cron ? '⏰ 已配置' : '—'}</Text>
+                    <Space wrap>
+                      <Text type="secondary" style={{ fontSize: 12 }}>能力:</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>UI</Text>
+                      <YesNo value={p.has_ui} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>Cron</Text>
+                      <YesNo value={p.has_cron} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>数据库</Text>
+                      <YesNo value={p.has_database} />
+                    </Space>
+                    <Space wrap>
+                      <Text type="secondary" style={{ fontSize: 12 }}>状态:</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>启用</Text>
+                      <YesNo value={p.status !== 'Loaded'} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>UI嵌入</Text>
+                      <YesNo value={p.has_ui && (p.status === 'Enabled' || p.status === 'Running')} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>Cron运行</Text>
+                      <YesNo value={p.status === 'Running'} />
                     </Space>
                   </Space>
                 </Card>

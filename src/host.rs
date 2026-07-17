@@ -137,7 +137,7 @@ impl HostContext for HostContextImpl {
             payload,
             source: self.plugin_id.clone(),
         };
-        let mut ctx = self.state.write().unwrap();
+        let ctx = self.state.write().unwrap();
         // 推入事件总线
         ctx.event_bus.publish(event.clone());
         // 广播给所有已启用/运行中的插件
@@ -152,8 +152,7 @@ impl HostContext for HostContextImpl {
             let status = ctx.manager.plugin_status(id);
             if matches!(
                 status,
-                Some(crate::plugin::PluginStatus::Enabled)
-                    | Some(crate::plugin::PluginStatus::Running)
+                Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
             ) {
                 if let Some(p) = ctx.manager.get(id) {
                     let _ = p.on_event(&event);
@@ -276,7 +275,6 @@ impl HostApp {
     pub fn start_hot_reload(state: SharedState) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-            use std::path::Path;
 
             // 获取搜索目录
             let dirs: Vec<PathBuf> = {
@@ -486,6 +484,8 @@ pub struct PluginInfo {
     pub has_ui: bool,
     /// 是否声明了定时任务（cron）。
     pub has_cron: bool,
+    /// 是否使用了数据库表（`metadata.tables` 非空）。
+    pub has_database: bool,
     /// qiankun 子应用入口 URL（`has_ui` 为 false 时为 None）。
     pub ui_entry: Option<String>,
     /// 插件声明的菜单树。
@@ -506,6 +506,7 @@ pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
     let author = meta.author.clone().unwrap_or_default();
     let description = meta.description.clone().unwrap_or_default();
     let has_cron = !meta.crons().is_empty();
+    let has_database = !meta.tables().is_empty();
     // 仅在启用/运行状态下暴露菜单
     let menu = if matches!(status, PluginStatus::Enabled | PluginStatus::Running) {
         meta.menus().to_vec()
@@ -520,6 +521,7 @@ pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
         description,
         has_ui: p.has_ui(),
         has_cron,
+        has_database,
         ui_entry: p
             .ui_base_dir()
             .map(|d| format!("/plugin-files/{}/dist/index.html", d)),
@@ -555,7 +557,7 @@ pub fn plugin_err_to_response(
 ///
 /// 扫描 `target/debug/`、`target/release/`、`bin/plugin/` 等常见路径，
 /// 按 `.dylib` / `.so` / `.dll` 扩展名匹配。
-pub fn find_dylib_paths(extra_dirs: &[std::path::PathBuf]) -> Vec<PathBuf> {
+pub fn find_dylib_paths(extra_dirs: &[PathBuf]) -> Vec<PathBuf> {
     let mut results = Vec::new();
 
     for dir in extra_dirs {
@@ -1194,7 +1196,7 @@ pub async fn handle_install_plugin(
     })?;
 
     // 查找解包后的 dylib（只在临时目录中查找，不扫描整个搜索目录）
-    let dylib_ext = crate::manager::PLATFORM_DYLIB_EXTENSION;
+    let dylib_ext = PLATFORM_DYLIB_EXTENSION;
     let dylib_paths: Vec<PathBuf> = walkdir::WalkDir::new(&temp_dir)
         .max_depth(3)
         .into_iter()
@@ -1284,7 +1286,7 @@ async fn handle_plugin_route(
     State(state): State<SharedState>,
     Path((plugin_id, route)): Path<(String, String)>,
     method: Method,
-    headers: axum::http::HeaderMap,
+    headers: http::HeaderMap,
     axum::extract::Query(query_params): axum::extract::Query<HashMap<String, String>>,
     body_bytes: axum::body::Bytes,
 ) -> impl IntoResponse {
@@ -1336,11 +1338,11 @@ fn path_prefix_match(route_path: &str, req_path: &str) -> bool {
 /// 从 axum 的请求组件构建标准 `http::Request<Vec<u8>>`。
 fn build_http_request(
     method: &Method,
-    headers: &axum::http::HeaderMap,
+    headers: &http::HeaderMap,
     path: &str,
     query_params: &HashMap<String, String>,
     body_bytes: &[u8],
-) -> http::Request<Vec<u8>> {
+) -> Request<Vec<u8>> {
     // 构建 URI（含查询参数）
     let mut uri = path.to_string();
     if !query_params.is_empty() {
@@ -1352,7 +1354,7 @@ fn build_http_request(
         uri.push_str(&qs.join("&"));
     }
 
-    let mut builder = http::Request::builder().method(method.clone()).uri(&uri);
+    let mut builder = Request::builder().method(method.clone()).uri(&uri);
     for (key, value) in headers.iter() {
         builder = builder.header(key, value);
     }
@@ -1360,7 +1362,7 @@ fn build_http_request(
 }
 
 /// 将 `http::Response<Vec<u8>>` 转为 axum Response。
-fn convert_http_response(resp: http::Response<Vec<u8>>) -> axum::response::Response {
+fn convert_http_response(resp: Response<Vec<u8>>) -> axum::response::Response {
     let (parts, body) = resp.into_parts();
     let mut builder = axum::response::Response::builder().status(parts.status);
     for (key, value) in parts.headers.iter() {

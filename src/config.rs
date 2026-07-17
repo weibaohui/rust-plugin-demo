@@ -81,7 +81,6 @@ plugins:
 
 use crate::error::{Error, ErrorKind, Result};
 use crate::manager::PluginManager;
-use crate::plugin::Plugin;
 use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "config_serde")]

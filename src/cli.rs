@@ -11,7 +11,7 @@
 */
 
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self};
 use std::path::Path;
 ///
 /// `plugin_name` 同时用作 crate 名和目录名（仅允许 `[a-z0-9_]`）。
