@@ -505,7 +505,8 @@ pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
     let meta = p.metadata();
     let author = meta.author.clone().unwrap_or_default();
     let description = meta.description.clone().unwrap_or_default();
-    let has_cron = !meta.crons().is_empty();
+    // cron 可来自 metadata 声明，也可来自插件的 cron_specs()（动态注册），两者都算
+    let has_cron = !meta.crons().is_empty() || !p.cron_specs().is_empty();
     let has_database = !meta.tables().is_empty();
     // 仅在启用/运行状态下暴露菜单
     let menu = if matches!(status, PluginStatus::Enabled | PluginStatus::Running) {
