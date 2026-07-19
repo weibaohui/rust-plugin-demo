@@ -13,7 +13,7 @@ PLUGIN_DIR      = $(BIN_DIR)/plugins
 PLUGIN_DIRS    := $(shell find "$(REPO_ROOT)examples" -name "Cargo.toml" -exec grep -l "dylib" {} \; | xargs -n1 dirname 2>/dev/null || echo "")
 
 # ---------- 主目标 ----------
-.PHONY: all build check test clean frontend run install plugins build-ui
+.PHONY: all build check test clean frontend run install plugins build-ui stop
 
 all: frontend build
 
@@ -90,6 +90,21 @@ run: install
 	@echo "╚══════════════════════════════════════════════════════════╝"
 	@echo ""
 	@cargo run
+
+stop: ## 停止占用 3000 端口的 plugkit 服务
+	@PID=$$(lsof -ti :3000 2>/dev/null); \
+	if [ -z "$$PID" ]; then \
+		echo "✓ 端口 3000 未被占用"; \
+	else \
+		echo "==> 终止占用 3000 端口的进程: $$PID"; \
+		kill $$PID && sleep 1 && \
+			( lsof -ti :3000 >/dev/null 2>&1 && kill -9 $$PID 2>/dev/null ) || true; \
+		if lsof -ti :3000 >/dev/null 2>&1; then \
+			echo "✗ 端口 3000 仍被占用"; exit 1; \
+		else \
+			echo "✓ 已停止"; \
+		fi \
+	fi
 
 # ---------- debug ----------
 list:

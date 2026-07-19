@@ -10,7 +10,7 @@ import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 
-const { Sider, Content, Footer } = Layout;
+const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
 
 function useRoute(): string {
@@ -67,16 +67,6 @@ function PluginUiView({ plugin }: { plugin: PluginInfo }) {
   const entry = useMemo(() => qiankunEntryFor(plugin, window.location.origin), [plugin]);
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Space>
-          <span style={{ fontSize: 24 }}>🔌</span>
-          <div>
-            <Text strong style={{ fontSize: 16 }}>{plugin.name}</Text>
-            <br />
-            <Text type="secondary" code>{plugin.id}</Text>
-          </div>
-        </Space>
-      </Card>
       {!entry ? (
         <Card>
           <div style={{ textAlign: 'center', padding: 40 }}>
@@ -86,7 +76,7 @@ function PluginUiView({ plugin }: { plugin: PluginInfo }) {
           </div>
         </Card>
       ) : (
-        <div id="plugin-mount" style={{ minHeight: 400, background: '#141414', borderRadius: 8, padding: 20 }} />
+        <div id="plugin-mount" />
       )}
     </div>
   );
@@ -95,13 +85,8 @@ function PluginUiView({ plugin }: { plugin: PluginInfo }) {
 export default function App(): ReactNode {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [libraries, setLibraries] = useState<LibraryInfo[]>([]);
-  const [logs, setLogs] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-
-  const addLog = useCallback((msg: string) => {
-    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 100));
-  }, []);
 
   const refreshPlugins = useCallback(async () => {
     try { const list = await listPlugins(); setPlugins(list); return list; }
@@ -123,42 +108,40 @@ export default function App(): ReactNode {
 
   const handleLoad = async (name: string) => {
     try {
-      setError(null); addLog(`正在加载插件库: ${name}...`);
-      await loadLibrary(name); addLog(`✅ 加载成功`);
+      setError(null);
+      await loadLibrary(name);
       await refreshPlugins(); await refreshLibraries(); navigate('/');
-    } catch (e) { addLog(`❌ 加载失败: ${e}`); setError(`加载失败: ${e}`); }
+    } catch (e) { setError(`加载失败: ${e}`); }
   };
 
   const handleUnload = async (id: string, keepData = false) => {
     try {
       setError(null);
-      addLog(keepData ? `正在卸载（保留数据）: ${id}...` : `正在完全卸载: ${id}...`);
       await unloadPlugin(id, keepData);
-      addLog(keepData ? `✅ 已卸载: ${id}（数据已保留）` : `✅ 已完全卸载: ${id}（数据已删除）`);
       await refreshPlugins(); await refreshLibraries();
-    } catch (e) { addLog(`❌ 卸载失败: ${e}`); setError(`卸载失败: ${e}`); }
+    } catch (e) { setError(`卸载失败: ${e}`); }
   };
 
   const handleUnloadAll = async () => {
-    try { setError(null); addLog('正在卸载所有插件...'); await unloadAllPlugins(); addLog('✅ 所有插件已卸载'); await refreshPlugins(); await refreshLibraries(); }
-    catch (e) { addLog(`❌ 卸载失败: ${e}`); setError(`卸载失败: ${e}`); }
+    try { setError(null); await unloadAllPlugins(); await refreshPlugins(); await refreshLibraries(); }
+    catch (e) { setError(`卸载失败: ${e}`); }
   };
 
   const handleEnable = async (id: string) => {
-    try { setError(null); addLog(`正在启用: ${id}...`); await enablePlugin(id); addLog(`✅ 已启用: ${id}`); await refreshPlugins(); }
-    catch (e) { addLog(`❌ 启用失败: ${e}`); setError(`启用失败: ${e}`); }
+    try { setError(null); await enablePlugin(id); await refreshPlugins(); }
+    catch (e) { setError(`启用失败: ${e}`); }
   };
   const handleDisable = async (id: string) => {
-    try { setError(null); addLog(`正在禁用: ${id}...`); await disablePlugin(id); addLog(`✅ 已禁用: ${id}`); await refreshPlugins(); }
-    catch (e) { addLog(`❌ 禁用失败: ${e}`); setError(`禁用失败: ${e}`); }
+    try { setError(null); await disablePlugin(id); await refreshPlugins(); }
+    catch (e) { setError(`禁用失败: ${e}`); }
   };
   const handleStart = async (id: string) => {
-    try { setError(null); addLog(`正在启动: ${id}...`); await startPlugin(id); addLog(`✅ 已启动: ${id}(cron 已注册)`); await refreshPlugins(); }
-    catch (e) { addLog(`❌ 启动失败: ${e}`); setError(`启动失败: ${e}`); }
+    try { setError(null); await startPlugin(id); await refreshPlugins(); }
+    catch (e) { setError(`启动失败: ${e}`); }
   };
   const handleStop = async (id: string) => {
-    try { setError(null); addLog(`正在停止: ${id}...`); await stopPlugin(id); addLog(`✅ 已停止: ${id}`); await refreshPlugins(); }
-    catch (e) { addLog(`❌ 停止失败: ${e}`); setError(`停止失败: ${e}`); }
+    try { setError(null); await stopPlugin(id); await refreshPlugins(); }
+    catch (e) { setError(`停止失败: ${e}`); }
   };
 
   const routePath = useRoute();
@@ -301,13 +284,6 @@ export default function App(): ReactNode {
               {error && <Alert message={error} type="error" closable onClose={() => setError(null)} style={{ marginBottom: 16 }} />}
               {content}
             </Content>
-            <Footer style={{ padding: '8px 16px', background: '#141414', borderTop: '1px solid #303030', maxHeight: 160, overflow: 'auto' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>📋 操作日志</Text>
-              <div style={{ marginTop: 4 }}>
-                {logs.length === 0 && <Text type="secondary" italic style={{ fontSize: 12 }}>暂无操作</Text>}
-                {logs.map((log, i) => <div key={i}><Text style={{ fontSize: 12, fontFamily: 'monospace' }} type="secondary">{log}</Text></div>)}
-              </div>
-            </Footer>
           </Layout>
         </Layout>
       </AntApp>

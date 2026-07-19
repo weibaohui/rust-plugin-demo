@@ -1,7 +1,7 @@
 /**
  * 法新社插件 React 面板（Ant Design 版）。
  *
- * 演示控件:Card / Form / Select / Input / Button / Table / Tag,
+ * 演示控件:Form / Select / Input / Button / Card / Table / Tag,
  * 体现主框架承载 antd 子应用。localStorage 持久化设置。
  */
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
@@ -72,38 +72,36 @@ function PanelContent({ pluginId = 'afp_plugin' }: AfpPanelProps): ReactNode {
   ];
 
   return (
-    <Card title="📡 法新社控制面板" style={{ maxWidth: 720 }}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <Form layout="vertical">
-          <Form.Item label="默认语言">
-            <Select value={language} onChange={setLanguage} options={LANGUAGES} />
-          </Form.Item>
-          <Form.Item label="备注">
-            <Input
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="输入备注信息"
-              allowClear
-            />
-          </Form.Item>
-          <Form.Item label="当前插件 ID">
-            <Input value={pluginId} disabled />
-          </Form.Item>
-          <Button type="primary" onClick={handleSave}>
-            💾 保存设置
-          </Button>
-        </Form>
-        <Card type="inner" title="语言演示数据" size="small">
-          <Table
-            columns={columns}
-            dataSource={DEMO_DATA}
-            pagination={false}
-            size="small"
-            rowKey="key"
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Form layout="vertical">
+        <Form.Item label="默认语言">
+          <Select value={language} onChange={setLanguage} options={LANGUAGES} />
+        </Form.Item>
+        <Form.Item label="备注">
+          <Input
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="输入备注信息"
+            allowClear
           />
-        </Card>
-      </Space>
-    </Card>
+        </Form.Item>
+        <Form.Item label="当前插件 ID">
+          <Input value={pluginId} disabled />
+        </Form.Item>
+        <Button type="primary" onClick={handleSave}>
+          💾 保存设置
+        </Button>
+      </Form>
+      <Card type="inner" title="语言演示数据" size="small">
+        <Table
+          columns={columns}
+          dataSource={DEMO_DATA}
+          pagination={false}
+          size="small"
+          rowKey="key"
+        />
+      </Card>
+    </Space>
   );
 }
 
