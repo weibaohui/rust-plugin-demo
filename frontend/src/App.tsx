@@ -9,6 +9,8 @@ import {
 import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
+import { useThemeMode } from './theme/use-theme-mode.tsx';
+import { ThemeToggle } from './components/theme-toggle';
 
 const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -87,6 +89,7 @@ export default function App(): ReactNode {
   const [libraries, setLibraries] = useState<LibraryInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const { isDark } = useThemeMode();
 
   const refreshPlugins = useCallback(async () => {
     try { const list = await listPlugins(); setPlugins(list); return list; }
@@ -269,15 +272,24 @@ export default function App(): ReactNode {
   }
 
   return (
-    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        cssVar: { key: isDark ? 'dark' : 'light' },
+        hashed: false,
+      }}
+    >
       <AntApp>
         <Layout style={{ minHeight: '100vh' }}>
-          <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme="dark">
+          <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme={isDark ? 'dark' : 'light'}>
             <div style={{ height: 32, margin: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Text strong style={{ color: '#1677ff', fontSize: collapsed ? 14 : 16 }}>{collapsed ? 'P' : 'plugkit'}</Text>
+              <Text strong style={{ color: 'var(--color-primary)', fontSize: collapsed ? 14 : 16 }}>{collapsed ? 'P' : 'plugkit'}</Text>
               {!collapsed && <Tag style={{ marginLeft: 8 }}>v0.2</Tag>}
             </div>
-            <Menu theme="dark" mode="inline" selectedKeys={selectedKeys} items={menuItems} onClick={handleMenuClick} />
+            <Menu theme={isDark ? 'dark' : 'light'} mode="inline" selectedKeys={selectedKeys} items={menuItems} onClick={handleMenuClick} />
+            <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--color-border)' }}>
+              <ThemeToggle />
+            </div>
           </Sider>
           <Layout>
             <Content style={{ margin: 16, overflow: 'auto' }}>

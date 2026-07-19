@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/micro.ts","./src/qiankun.d.ts","./src/vite-env.d.ts","./src/components/pluginui.tsx"],"version":"5.7.3"}
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/micro.ts","./src/qiankun.d.ts","./src/vite-env.d.ts","./src/components/pluginui.tsx","./src/components/theme-toggle.tsx","./src/theme/theme-palette.ts","./src/theme/use-theme-mode.tsx"],"version":"5.7.3"}

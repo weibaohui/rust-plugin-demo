@@ -5,8 +5,12 @@
  * 由宿主的 `/plugin-files/*` 路径服务。
  *
  * activeRule 形如 `/plugin/<id>`：前端使用该路径触发相应子应用挂载。
+ *
+ * 主题通过 `initGlobalState` + `setGlobalState` 广播给子应用，
+ * 子应用通过 `props.onGlobalStateChange` 订阅实时变化。
  */
 import type { PluginInfo } from './api';
+import type { ThemeMode } from './theme/theme-palette';
 
 interface QiankunAppEntry {
   name: string;
@@ -46,6 +50,35 @@ export function appsForPlugins(plugins: PluginInfo[], origin: string): QiankunAp
   return apps;
 }
 
+// ----------------------------------------------------------------------------
+// 主题广播
+// ----------------------------------------------------------------------------
+
+/**
+ * 主题广播全局状态 — 由 `useThemeMode` hook 调用。
+ *
+ * 工作机制：
+ * 1. 写 `currentTheme`，供后续注册子应用时作为 `props.themeMode` 种子
+ * 2. 若 `initGlobalState` 已初始化，调用 `setGlobalState` 广播到所有子应用
+ * 3. 派发 `app:theme` 自定义事件（兜底，兼容子应用在非 qiankun 环境下运行）
+ */
+let themeActions: ReturnType<typeof import('qiankun').initGlobalState> | null = null;
+let currentTheme: ThemeMode = 'dark';
+
+export function setGlobalTheme(mode: ThemeMode): void {
+  currentTheme = mode;
+  themeActions?.setGlobalState({ themeMode: mode });
+  window.dispatchEvent(new CustomEvent('app:theme', {
+    detail: { mode },
+    bubbles: true,
+    composed: true,
+  }));
+}
+
+export function getCurrentTheme(): ThemeMode {
+  return currentTheme;
+}
+
 /**
  * 调用 qiankun.registerMicroApps() 和 start()。
  * 用动态 import 避免在 SSR / 测试环境强制加载 qiankun。
@@ -54,9 +87,12 @@ export async function registerLoadedPlugins(plugins: PluginInfo[], origin: strin
   const apps = appsForPlugins(plugins, origin);
   if (apps.length === 0) return;
 
-  const { registerMicroApps, start } = await import('qiankun');
+  const qiankun = await import('qiankun');
 
-  registerMicroApps(apps, {
+  themeActions = qiankun.initGlobalState({ themeMode: currentTheme });
+
+  qiankun.registerMicroApps(apps, {
+    props: { themeMode: currentTheme },
     beforeLoad: [
       async (app: { name: string }) => {
         // eslint-disable-next-line no-console
@@ -66,7 +102,7 @@ export async function registerLoadedPlugins(plugins: PluginInfo[], origin: strin
     ],
   });
 
-  start({ sandbox: { experimentalStyleIsolation: true } });
+  qiankun.start({ sandbox: { experimentalStyleIsolation: true } });
 }
 
 export type { QiankunAppEntry };

@@ -7,6 +7,25 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Pre-paint theme bootstrap — 避免首屏浅/暗闪烁。
+      // 必须放在 module script 之前以同步执行。
+      (function () {
+        try {
+          var saved = localStorage.getItem('plugkit:theme');
+          var mode = saved === 'light' || saved === 'dark'
+            ? saved
+            : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.dataset.theme = mode;
+          // 项目级 CSS 变量 — 与 useThemeMode 同源，避免 React mount 前的白闪
+          var palette = mode === 'dark'
+            ? { '--color-bg': '#000000', '--color-text': '#e6e6e6', '--color-text-secondary': '#a6a6a6', '--color-border': '#303030', '--color-primary': '#1677ff' }
+            : { '--color-bg': '#f5f5f5', '--color-text': '#1f1f1f', '--color-text-secondary': '#595959', '--color-border': '#e5e5e5', '--color-primary': '#1677ff' };
+          var style = document.documentElement.style;
+          for (var k in palette) style.setProperty(k, palette[k]);
+        } catch (e) { /* localStorage 不可用时静默回退 */ }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

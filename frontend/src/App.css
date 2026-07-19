@@ -1,8 +1,22 @@
-/* plugkit Admin — Ant Design 暗色主题微调 */
+/* plugkit Admin — Ant Design 双主题微调。
+   颜色由 :root 上的 --color-* CSS 变量驱动，
+   由 useThemeMode() 通过 theme-palette.ts 写入。 */
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-body {
-  background: #000;
+html {
+  transition: background-color .2s ease, color .2s ease;
+}
+
+html[data-theme='dark'] body {
+  background: var(--color-bg, #000);
+  color: var(--color-text, #e6e6e6);
+  overflow: hidden;
+}
+
+html[data-theme='light'] body {
+  background: var(--color-bg, #f5f5f5);
+  color: var(--color-text, #1f1f1f);
   overflow: hidden;
 }
 
