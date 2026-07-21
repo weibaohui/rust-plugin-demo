@@ -61,6 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = SqliteDatabase::open("plugkit.db")?;
     let app = HostApp::new()
         .with_database(Arc::new(db))
+        .with_auth()
         .with_plugin_search_dir("bin/plugins")
         .auto_load();
     let state: plugkit::host::SharedState = Arc::new(std::sync::RwLock::new(app));
