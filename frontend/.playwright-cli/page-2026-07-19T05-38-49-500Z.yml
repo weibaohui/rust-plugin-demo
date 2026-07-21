@@ -1,0 +1,81 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - strong [ref=e9]: plugkit
+        - generic [ref=e10]: v0.2
+      - menu [ref=e11]:
+        - menuitem "api 已加载插件" [ref=e12] [cursor=pointer]:
+          - img "api" [ref=e13]:
+            - img [ref=e14]
+          - generic [ref=e16]: 已加载插件
+        - menuitem "folder-open 插件库管理" [ref=e17] [cursor=pointer]:
+          - img "folder-open" [ref=e18]:
+            - img [ref=e19]
+          - generic [ref=e21]: 插件库管理
+        - menuitem "📡 法新社" [ref=e39] [cursor=pointer]:
+          - generic: 📡
+          - generic [ref=e40]: 法新社
+    - img "left" [ref=e23] [cursor=pointer]:
+      - img [ref=e24]
+  - generic [ref=e26]:
+    - main [ref=e27]:
+      - generic [ref=e41]:
+        - generic [ref=e44]:
+          - generic [ref=e45]: 🔌
+          - generic [ref=e47]:
+            - strong [ref=e49]: Agence France-Presse
+            - code [ref=e51]: afp_plugin::afp_plugin::AfpAgency
+        - generic [ref=e56]:
+          - generic [ref=e59]: 📡 法新社控制面板
+          - generic [ref=e61]:
+            - generic [ref=e63]:
+              - generic [ref=e65]:
+                - generic "默认语言" [ref=e67]
+                - generic [ref=e71] [cursor=pointer]:
+                  - generic [ref=e73]:
+                    - combobox [ref=e75]
+                    - generic "🇫🇷 Français" [ref=e76]
+                  - generic:
+                    - img:
+                      - img
+              - generic [ref=e78]:
+                - generic "备注" [ref=e80]
+                - textbox "输入备注信息" [ref=e85]
+              - generic [ref=e88]:
+                - generic "当前插件 ID" [ref=e90]
+                - textbox [disabled] [ref=e94]: afp_plugin
+              - button "💾 保存设置" [ref=e95] [cursor=pointer]:
+                - generic [ref=e96]: 💾 保存设置
+            - generic [ref=e98]:
+              - generic [ref=e101]: 语言演示数据
+              - table [ref=e109]:
+                - rowgroup [ref=e110]:
+                  - row "语言 代码 地区" [ref=e111]:
+                    - columnheader "语言" [ref=e112]
+                    - columnheader "代码" [ref=e113]
+                    - columnheader "地区" [ref=e114]
+                - rowgroup [ref=e115]:
+                  - row "Français fr Paris" [ref=e116]:
+                    - cell "Français" [ref=e117]
+                    - cell "fr" [ref=e118]:
+                      - generic [ref=e119]: fr
+                    - cell "Paris" [ref=e120]
+                  - row "English en London" [ref=e121]:
+                    - cell "English" [ref=e122]
+                    - cell "en" [ref=e123]:
+                      - generic [ref=e124]: en
+                    - cell "London" [ref=e125]
+                  - row "العربية ar Cairo" [ref=e126]:
+                    - cell "العربية" [ref=e127]
+                    - cell "ar" [ref=e128]:
+                      - generic [ref=e129]: ar
+                    - cell "Cairo" [ref=e130]
+                  - row "Español es Madrid" [ref=e131]:
+                    - cell "Español" [ref=e132]
+                    - cell "es" [ref=e133]:
+                      - generic [ref=e134]: es
+                    - cell "Madrid" [ref=e135]
+    - contentinfo [ref=e36]:
+      - text: 📋 操作日志
+      - generic [ref=e38]: 暂无操作

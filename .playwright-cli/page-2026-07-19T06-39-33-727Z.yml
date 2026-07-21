@@ -1,0 +1,44 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - strong [ref=e9]: plugkit
+        - generic [ref=e10]: v0.2
+      - menu [ref=e11]:
+        - menuitem "api 已加载插件" [ref=e12] [cursor=pointer]:
+          - img "api" [ref=e13]:
+            - img [ref=e14]
+          - generic [ref=e16]: 已加载插件
+        - menuitem "folder-open 插件库管理" [ref=e17] [cursor=pointer]:
+          - img "folder-open" [ref=e18]:
+            - img [ref=e19]
+          - generic [ref=e21]: 插件库管理
+        - menuitem "🗄️ 数据管理" [ref=e22] [cursor=pointer]:
+          - generic: 🗄️
+          - generic [ref=e23]: 数据管理
+    - img "left" [ref=e25] [cursor=pointer]:
+      - img [ref=e26]
+  - main [ref=e29]:
+    - generic [ref=e34]:
+      - generic [ref=e37]: 🗄️ Data Plugin 控制面板
+      - generic [ref=e39]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: "数据记录 (插件: data_plugin.DataPlugin)"
+          - button "plus 新增" [ref=e43] [cursor=pointer]:
+            - img "plus" [ref=e45]:
+              - img [ref=e46]
+            - generic [ref=e49]: 新增
+        - table [ref=e57]:
+          - rowgroup [ref=e64]:
+            - row "ID 标题 内容 创建时间 操作" [ref=e65]:
+              - columnheader "ID" [ref=e66]
+              - columnheader "标题" [ref=e67]
+              - columnheader "内容" [ref=e68]
+              - columnheader "创建时间" [ref=e69]
+              - columnheader "操作" [ref=e70]
+          - rowgroup [ref=e71]:
+            - row "No data No data" [ref=e72]:
+              - cell "No data No data" [ref=e73]:
+                - generic [ref=e74]:
+                  - img "No data" [ref=e76]
+                  - generic [ref=e82]: No data

@@ -117,3 +117,6 @@ pub mod cli;
 
 /// 插件间事件总线。
 pub mod event_bus;
+
+/// 认证模块：JWT 登录、权限校验、请求上下文。
+pub mod auth;

@@ -1,0 +1,2 @@
+[GET] http://localhost:3000/api/plugins => [200] OK
+[GET] http://localhost:3000/api/libraries => [200] OK

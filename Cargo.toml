@@ -41,6 +41,13 @@ notify = { version = "7", features = ["macos_kqueue"] }
 tar = "0.4"
 flate2 = "1.0"
 
+# 认证模块依赖
+jsonwebtoken = "9"
+bcrypt = "0.15"
+rand = "0.8"
+uuid = { version = "1", features = ["v4"] }
+base64 = "0.21"
+
 [build-dependencies]
 rustc_version = "0.4"
 

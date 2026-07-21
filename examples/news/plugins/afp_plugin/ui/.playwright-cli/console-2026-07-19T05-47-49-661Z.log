@@ -1,0 +1,3 @@
+[     128ms] TypeError: Cannot read properties of undefined (reading 'vitemount')
+    at http://localhost:3000/plugin-files/afp_plugin/ui/dist/index.html:9:20
+    at <anonymous>

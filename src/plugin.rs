@@ -79,6 +79,7 @@ pub extern "C" fn register_plugins(
 
 */
 
+use crate::auth::ctx::RequestCtx;
 use crate::database::DatabaseExt;
 use crate::error::Result;
 use crate::metadata::PluginMetadata;
@@ -125,22 +126,38 @@ pub use crate::metadata::CronSpec;
 ///
 /// 参数:
 /// - `plugin` — 插件实例引用
-/// - `db` — 宿主数据库接口
+/// - `ctx` — 请求上下文，包含认证信息、数据库访问、事件总线等
 /// - `req` — 标准 HTTP 请求 (body 为 `Vec<u8>`)
 ///
 /// 返回标准 HTTP 响应 (body 为 `Vec<u8>`)。
 pub type PluginRouteHandler = fn(
     plugin: &dyn Plugin,
-    db: &dyn DatabaseExt,
+    ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>>;
+
+/// 插件路由认证要求。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthRequirement {
+    /// 公开接口，无需认证。
+    Public,
+    /// 需要登录，但不检查具体权限。
+    Authenticated,
+    /// 需要特定权限。
+    Permission(&'static str),
+}
 
 /// 插件路由定义 — 一个功能一个 handler。
 #[derive(Debug, Clone)]
 pub struct PluginRoute {
+    /// HTTP 方法。
     pub method: http::Method,
-    pub path: String, // 插件命名空间下的相对路径，如 "/items"、"/items/:id"
+    /// 插件命名空间下的相对路径，如 "/items"、"/items/:id"。
+    pub path: String,
+    /// 路由 handler 函数指针。
     pub handler: PluginRouteHandler,
+    /// 路由认证要求，宿主 middleware 据此拦截。
+    pub auth: AuthRequirement,
 }
 
 ///
@@ -320,6 +337,8 @@ pub(crate) const COMPATIBILITY_FN_NAME: &[u8] = b"compatibility_hash\0";
 ///
 /// 此函数被暴露出来，以便插件提供者中链接的版本可以与插件宿主中的版本进行比较。
 ///
+/// 哈希基于 crate 版本、rustc 版本和 `PluginRouteHandler` 类型指纹计算。
+/// 当 handler 签名或相关类型变更时，哈希自动变化，宿主据此拒绝加载旧插件。
 #[allow(unsafe_code)]
 #[no_mangle]
 pub extern "C" fn compatibility_hash() -> u64 {
@@ -327,13 +346,18 @@ pub extern "C" fn compatibility_hash() -> u64 {
     const RUSTC_VERSION: &str = env!("RUSTC_VERSION");
 
     debug!(
-        "compatibility_hash() -> Hash({:?}, {:?})",
+        "compatibility_hash() -> Hash({:?}, {:?}, PluginRouteHandler)",
         CARGO_PKG_VERSION, RUSTC_VERSION
     );
 
     let mut s = DefaultHasher::new();
     CARGO_PKG_VERSION.hash(&mut s);
     RUSTC_VERSION.hash(&mut s);
+    // 加入 ABI 版本号，确保 PluginRouteHandler 签名变更时哈希变化
+    // v1: 初始版本 (plugin, db, req)
+    // v2: 2026-07-21 改为 (plugin, ctx, req)
+    const ABI_VERSION: u64 = 2;
+    ABI_VERSION.hash(&mut s);
     s.finish()
 }
 

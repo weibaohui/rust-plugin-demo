@@ -1,0 +1,48 @@
+- generic [ref=e4]:
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - generic "默认语言" [ref=e10]
+      - generic [ref=e14] [cursor=pointer]:
+        - generic [ref=e16]:
+          - combobox [ref=e18]
+          - generic "🇫🇷 Français" [ref=e19]
+        - generic:
+          - img:
+            - img
+    - generic [ref=e21]:
+      - generic "备注" [ref=e23]
+      - textbox "输入备注信息" [ref=e28]
+    - generic [ref=e31]:
+      - generic "当前插件 ID" [ref=e33]
+      - textbox [disabled] [ref=e37]: afp_plugin
+    - button "💾 保存设置" [ref=e38] [cursor=pointer]:
+      - generic [ref=e39]: 💾 保存设置
+  - generic [ref=e41]:
+    - generic [ref=e44]: 语言演示数据
+    - table [ref=e52]:
+      - rowgroup [ref=e53]:
+        - row "语言 代码 地区" [ref=e54]:
+          - columnheader "语言" [ref=e55]
+          - columnheader "代码" [ref=e56]
+          - columnheader "地区" [ref=e57]
+      - rowgroup [ref=e58]:
+        - row "Français fr Paris" [ref=e59]:
+          - cell "Français" [ref=e60]
+          - cell "fr" [ref=e61]:
+            - generic [ref=e62]: fr
+          - cell "Paris" [ref=e63]
+        - row "English en London" [ref=e64]:
+          - cell "English" [ref=e65]
+          - cell "en" [ref=e66]:
+            - generic [ref=e67]: en
+          - cell "London" [ref=e68]
+        - row "العربية ar Cairo" [ref=e69]:
+          - cell "العربية" [ref=e70]
+          - cell "ar" [ref=e71]:
+            - generic [ref=e72]: ar
+          - cell "Cairo" [ref=e73]
+        - row "Español es Madrid" [ref=e74]:
+          - cell "Español" [ref=e75]
+          - cell "es" [ref=e76]:
+            - generic [ref=e77]: es
+          - cell "Madrid" [ref=e78]

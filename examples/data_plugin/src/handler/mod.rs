@@ -1,15 +1,15 @@
-//! HTTP handler ��� — 解析请求，调用 service (SeaORM)，构建 HTTP 响应。
+//! HTTP handler — 解析请求，调用 service (SeaORM)，构建 HTTP 响应。
 
 use crate::db;
 use crate::service;
-use plugkit::database::DatabaseExt;
+use plugkit::auth::RequestCtx;
 use plugkit::plugin::Plugin;
 use http::StatusCode;
 
 /// GET /items — 列出所有数据记录。
 pub fn handle_list_items(
     _plugin: &dyn Plugin,
-    _db: &dyn DatabaseExt,
+    _ctx: &RequestCtx,
     _req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     let conn = db::connection();
@@ -22,7 +22,7 @@ pub fn handle_list_items(
 /// POST /items — 创建一条数据记录。
 pub fn handle_create_item(
     _plugin: &dyn Plugin,
-    _db: &dyn DatabaseExt,
+    _ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     let (title, content) = match parse_body(req.body()) {
@@ -39,7 +39,7 @@ pub fn handle_create_item(
 /// PUT /items — 更新一条数据记录（ID 从 URI 路径中提取）。
 pub fn handle_update_item(
     _plugin: &dyn Plugin,
-    _db: &dyn DatabaseExt,
+    _ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     let id = match service::parse_id(req.uri().path()) {
@@ -60,7 +60,7 @@ pub fn handle_update_item(
 /// DELETE /items — 删除一条数据记录（ID 从 URI 路径中提取）。
 pub fn handle_delete_item(
     _plugin: &dyn Plugin,
-    _db: &dyn DatabaseExt,
+    _ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     let id = match service::parse_id(req.uri().path()) {
@@ -75,7 +75,7 @@ pub fn handle_delete_item(
 }
 
 // ------------------------------------------------------------------------------------------------
-// HTTP 辅��
+// HTTP 辅助
 // ------------------------------------------------------------------------------------------------
 
 fn parse_body(body: &[u8]) -> Option<(String, String)> {

@@ -1,0 +1,156 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - strong [ref=e9]: plugkit
+        - generic [ref=e10]: v0.2
+      - menu [ref=e11]:
+        - menuitem "api 已加载插件" [ref=e12] [cursor=pointer]:
+          - img "api" [ref=e13]:
+            - img [ref=e14]
+          - generic [ref=e16]: 已加载插件
+        - menuitem "folder-open 插件库管理" [ref=e17] [cursor=pointer]:
+          - img "folder-open" [ref=e18]:
+            - img [ref=e19]
+          - generic [ref=e21]: 插件库管理
+        - menuitem "📰 路透社" [ref=e22] [cursor=pointer]:
+          - generic: 📰
+          - generic [ref=e23]: 路透社
+        - menuitem "🗄️ 数据管理" [ref=e24] [cursor=pointer]:
+          - generic: 🗄️
+          - generic [ref=e25]: 数据管理
+    - img "left" [ref=e27] [cursor=pointer]:
+      - img [ref=e28]
+  - generic [ref=e30]:
+    - main [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - img "api" [ref=e36]:
+              - img [ref=e37]
+            - text: 已加载的插件 (4)
+          - button "delete 卸载全部" [ref=e42] [cursor=pointer]:
+            - img "delete" [ref=e44]:
+              - img [ref=e45]
+            - generic [ref=e47]: 卸载全部
+        - generic [ref=e49]:
+          - generic [ref=e51] [cursor=pointer]:
+            - generic [ref=e53]:
+              - generic [ref=e55]:
+                - strong [ref=e58]: Data Plugin
+                - generic [ref=e60]: 已启用（菜单可见）
+                - code [ref=e63]: v0.1.0
+              - generic [ref=e65]: "作者: plugkit <plugkit@example.com>"
+              - generic [ref=e67]: 数据 CRUD 插件 — 演示数据库操作、UI 数据表格、cron 定时任务
+              - generic [ref=e69]:
+                - generic [ref=e70]: "ID:"
+                - code [ref=e73]: data_plugin.DataPlugin
+              - generic [ref=e75]:
+                - generic [ref=e76]: "启用:"
+                - generic [ref=e78]: ✅ 是
+                - generic [ref=e79]: "UI嵌入:"
+                - generic [ref=e81]: ✅ 是
+                - generic [ref=e82]: "Cron:"
+                - generic [ref=e84]: ⭕ 否
+            - list [ref=e85]:
+              - listitem [ref=e86]:
+                - button "play-circle 启动" [ref=e88]:
+                  - img "play-circle" [ref=e90]:
+                    - img [ref=e91]
+                  - generic [ref=e94]: 启动
+              - listitem [ref=e95]:
+                - button "pause-circle 禁用" [ref=e97]:
+                  - img "pause-circle" [ref=e99]:
+                    - img [ref=e100]
+                  - generic [ref=e102]: 禁用
+          - generic [ref=e104] [cursor=pointer]:
+            - generic [ref=e106]:
+              - generic [ref=e108]:
+                - strong [ref=e111]: Agence France-Presse
+                - generic [ref=e113]: 已加载（未启用）
+                - code [ref=e116]: v0.1.0
+              - generic [ref=e118]: "作者: AtomGit <noreply@atomgit.com>"
+              - generic [ref=e120]: 法新社新闻机构插件,AFP 格式化风格
+              - generic [ref=e122]:
+                - generic [ref=e123]: "ID:"
+                - code [ref=e126]: afp_plugin::afp_plugin::AfpAgency
+              - generic [ref=e128]:
+                - generic [ref=e129]: "启用:"
+                - generic [ref=e131]: ⭕ 否
+                - generic [ref=e132]: "UI嵌入:"
+                - generic [ref=e134]: ✅ 是
+                - generic [ref=e135]: "Cron:"
+                - generic [ref=e137]: ⭕ 否
+            - list [ref=e138]:
+              - listitem [ref=e139]:
+                - button "caret-up 启用" [ref=e141]:
+                  - img "caret-up" [ref=e143]:
+                    - img [ref=e144]
+                  - generic [ref=e146]: 启用
+              - listitem [ref=e147]:
+                - button "delete 完全卸载" [ref=e149]:
+                  - img "delete" [ref=e151]:
+                    - img [ref=e152]
+                  - generic [ref=e154]: 完全卸载
+              - listitem [ref=e155]:
+                - button "仅卸载" [ref=e157]:
+                  - generic [ref=e158]: 仅卸载
+          - generic [ref=e160] [cursor=pointer]:
+            - generic [ref=e162]:
+              - generic [ref=e164]:
+                - strong [ref=e167]: Reuters
+                - generic [ref=e169]: 运行中（cron 调度）
+                - code [ref=e172]: v0.1.0
+              - generic [ref=e174]: "作者: AtomGit <noreply@atomgit.com>"
+              - generic [ref=e176]: 路透社新闻机构插件,Reuters 格式化风格
+              - generic [ref=e178]:
+                - generic [ref=e179]: "ID:"
+                - code [ref=e182]: reuters_plugin::reuters_plugin::ReutersAgency
+              - generic [ref=e184]:
+                - generic [ref=e185]: "启用:"
+                - generic [ref=e187]: ✅ 是
+                - generic [ref=e188]: "UI嵌入:"
+                - generic [ref=e190]: ✅ 是
+                - generic [ref=e191]: "Cron:"
+                - generic [ref=e193]: ✅ 是
+            - list [ref=e194]:
+              - listitem [ref=e195]:
+                - button "caret-down 停止" [ref=e197]:
+                  - img "caret-down" [ref=e199]:
+                    - img [ref=e200]
+                  - generic [ref=e202]: 停止
+          - generic [ref=e204] [cursor=pointer]:
+            - generic [ref=e206]:
+              - generic [ref=e208]:
+                - strong [ref=e211]: Hello Plugin
+                - generic [ref=e213]: 已加载（未启用）
+                - code [ref=e216]: v0.1.0
+              - generic [ref=e218]: "作者: plugkit <plugkit@example.com>"
+              - generic [ref=e220]: 最小可用插件示例 — 展示了完整的生命周期钩子
+              - generic [ref=e222]:
+                - generic [ref=e223]: "ID:"
+                - code [ref=e226]: hello_plugin::hello_plugin::HelloPlugin
+              - generic [ref=e228]:
+                - generic [ref=e229]: "启用:"
+                - generic [ref=e231]: ⭕ 否
+                - generic [ref=e232]: "UI嵌入:"
+                - generic [ref=e234]: ⭕ 否
+                - generic [ref=e235]: "Cron:"
+                - generic [ref=e237]: ⭕ 否
+            - list [ref=e238]:
+              - listitem [ref=e239]:
+                - button "caret-up 启用" [ref=e241]:
+                  - img "caret-up" [ref=e243]:
+                    - img [ref=e244]
+                  - generic [ref=e246]: 启用
+              - listitem [ref=e247]:
+                - button "delete 完全卸载" [ref=e249]:
+                  - img "delete" [ref=e251]:
+                    - img [ref=e252]
+                  - generic [ref=e254]: 完全卸载
+              - listitem [ref=e255]:
+                - button "仅卸载" [ref=e257]:
+                  - generic [ref=e258]: 仅卸载
+    - contentinfo [ref=e259]:
+      - text: 📋 操作日志
+      - generic [ref=e261]: 暂无操作

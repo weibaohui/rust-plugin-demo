@@ -9,7 +9,7 @@
 */
 
 use serde::{Deserialize, Serialize};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 /// 由插件发布，宿主广播给所有已启用/运行中的插件。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,11 +29,11 @@ pub struct Event {
 ///
 /// 当前是一个简单的广播实现——所有订阅方收到所有事件，
 /// 按 `topic` 自行过滤。
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EventBus {
     /// 历史事件记录（可选的，用于调试 / 新订阅方回放）。
     /// 最多保留 `max_history` 条。
-    history: RwLock<Vec<Event>>,
+    history: Arc<RwLock<Vec<Event>>>,
     max_history: usize,
 }
 
@@ -47,7 +47,7 @@ impl EventBus {
     /// 创建一个新的事件总线（保留最近 100 条历史）。
     pub fn new() -> Self {
         Self {
-            history: RwLock::new(Vec::with_capacity(100)),
+            history: Arc::new(RwLock::new(Vec::with_capacity(100))),
             max_history: 100,
         }
     }
@@ -55,7 +55,7 @@ impl EventBus {
     /// 创建一个可配置历史容量的总线。
     pub fn with_max_history(max: usize) -> Self {
         Self {
-            history: RwLock::new(Vec::with_capacity(max)),
+            history: Arc::new(RwLock::new(Vec::with_capacity(max))),
             max_history: max,
         }
     }

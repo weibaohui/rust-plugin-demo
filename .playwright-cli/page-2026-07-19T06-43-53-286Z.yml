@@ -1,0 +1,21 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - strong [ref=e9]: plugkit
+        - generic [ref=e10]: v0.2
+      - menu [ref=e11]:
+        - menuitem "api 已加载插件" [ref=e12] [cursor=pointer]:
+          - img "api" [ref=e13]:
+            - img [ref=e14]
+          - generic [ref=e16]: 已加载插件
+        - menuitem "folder-open 插件库管理" [ref=e17] [cursor=pointer]:
+          - img "folder-open" [ref=e18]:
+            - img [ref=e19]
+          - generic [ref=e21]: 插件库管理
+        - menuitem "🗄️ 数据管理" [ref=e22] [cursor=pointer]:
+          - generic: 🗄️
+          - generic [ref=e23]: 数据管理
+    - img "left" [ref=e25] [cursor=pointer]:
+      - img [ref=e26]
+  - main [ref=e29]

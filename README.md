@@ -21,6 +21,7 @@
 | `metadata` | `PluginMetadata` — 声明式元信息（名称/版本/依赖/菜单/cron） |
 | `config` | `PluginManagerConfiguration` — 从配置文件初始化插件管理器 |
 | `error` | 统一错误类型（404/409/500 映射） |
+| `auth` | JWT 登录认证、声明式路由权限、`RequestCtx` 上下文 |
 
 ### 宿主能力（`plugkit::host`）
 
@@ -54,7 +55,7 @@
 
 ```rust
 use plugkit::host::{host_router, HostApp, serve_frontend_handler};
-use plugkit::plugin::{Plugin, PluginManager};
+use plugkit::plugin::Plugin;
 use std::sync::Arc;
 
 #[derive(Debug)] struct MyPlugin { id: String }
@@ -64,15 +65,35 @@ impl Plugin for MyPlugin {
 
 #[tokio::main]
 async fn main() {
-    let app = HostApp::<MyPlugin>::new();
+    let app = HostApp::new();
     let state = Arc::new(std::sync::RwLock::new(app));
-    let router = host_router::<MyPlugin>()
+    let router = host_router()
         .fallback(serve_frontend_handler)
         .with_state(state);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, router).await.unwrap();
 }
 ```
+
+## 认证
+
+启用 JWT 认证：
+
+```rust
+use plugkit::database::SqliteDatabase;
+use std::sync::Arc;
+
+let db = Arc::new(SqliteDatabase::open("plugkit.db").unwrap());
+let app = HostApp::new()
+    .with_database(db)
+    .with_auth();  // 启用认证
+```
+
+- 默认管理员：`admin` / 环境变量 `PLUGKIT_ADMIN_PASSWORD` 或随机生成
+- 登录端点：`POST /auth/login`
+- 插件声明式权限：`AuthRequirement::Public` / `Authenticated` / `Permission("xxx")`
+
+详见 [`docs/auth.md`](docs/auth.md)。
 
 ## 完整示例
 

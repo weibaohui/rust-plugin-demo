@@ -26,6 +26,9 @@ async fn main() {
 ```
 */
 
+use crate::auth::ctx::RequestCtx;
+use crate::auth::routes::{handle_login, handle_logout, handle_me, handle_revoke_all};
+use crate::auth::service::{AuthService, AuthServiceImpl};
 use crate::database::DatabaseExt;
 use crate::error::ErrorKind;
 use crate::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
@@ -185,6 +188,8 @@ pub struct HostApp {
     pub event_bus: crate::event_bus::EventBus,
     /// 已激活插件的路由注册表 — enable 时注入，disable 时移除。
     pub active_plugin_routes: HashMap<String, Vec<crate::plugin::PluginRoute>>,
+    /// 认证服务（若启用认证）。
+    pub auth_service: Option<Arc<dyn AuthService>>,
 }
 
 impl Default for HostApp {
@@ -204,6 +209,7 @@ impl HostApp {
             plugin_search_dirs: Vec::new(),
             event_bus: crate::event_bus::EventBus::new(),
             active_plugin_routes: HashMap::new(),
+            auth_service: None,
         }
     }
 
@@ -249,6 +255,28 @@ impl HostApp {
     pub fn with_database(mut self, db: Arc<dyn DatabaseExt>) -> Self {
         self.manager = self.manager.with_database(db);
         self
+    }
+
+    /// 启用认证服务。
+    ///
+    /// 初始化数据库表（users/tokens/role_permissions），创建默认管理员（若不存在），
+    /// 并设置 `auth_service`。
+    pub fn with_auth(mut self) -> Self {
+        let db = self.manager.database().clone();
+        if let Some(db) = db {
+            // 初始化认证相关表
+            let _ = init_auth_tables(db.as_ref());
+            // 创建默认管理员（密码从环境变量读取，或随机生成打印到控制台）
+            let _ = ensure_default_admin(db.as_ref());
+            let auth_service = AuthServiceImpl::new(db.clone());
+            self.auth_service = Some(Arc::new(auth_service));
+        }
+        self
+    }
+
+    /// 获取认证服务（若已启用）。
+    pub fn auth_service(&self) -> Option<&Arc<dyn AuthService>> {
+        self.auth_service.as_ref()
     }
 
     /// 注册插件 UI 嵌入目录。
@@ -1318,8 +1346,27 @@ async fn handle_plugin_route(
 
     for route in &routes {
         if route.method == method && path_prefix_match(&route.path, &req_path) {
-            let db_ref: &dyn DatabaseExt = db.as_deref().unwrap_or(&crate::manager::NoopDatabase);
-            let resp = (route.handler)(plugin.as_ref(), db_ref, http_req);
+            let db_ref: Arc<dyn DatabaseExt> = db
+                .clone()
+                .unwrap_or_else(|| Arc::new(crate::manager::NoopDatabase));
+            let event_bus = {
+                let ctx = state.read().unwrap();
+                ctx.event_bus.clone()
+            };
+            let auth_service = {
+                let ctx = state.read().unwrap();
+                ctx.auth_service.clone()
+            };
+            let request_ctx = RequestCtx {
+                principal: None, // 由 auth middleware 填充
+                auth_service: auth_service
+                    .unwrap_or_else(|| Arc::new(AuthServiceImpl::new(db_ref.clone()))),
+                db: db_ref,
+                event_bus: Arc::new(event_bus),
+                plugin_id: plugin_id.clone(),
+                request_id: uuid::Uuid::new_v4().to_string(),
+            };
+            let resp = (route.handler)(plugin.as_ref(), &request_ctx, http_req);
             return convert_http_response(resp);
         }
     }
@@ -1402,6 +1449,11 @@ fn convert_http_response(resp: Response<Vec<u8>>) -> axum::response::Response {
 /// - 业务路由（如发布新闻）
 pub fn host_router() -> Router<SharedState> {
     Router::new()
+        // 认证端点
+        .route("/auth/login", post(handle_login))
+        .route("/auth/logout", post(handle_logout))
+        .route("/auth/revoke-all", post(handle_revoke_all))
+        .route("/auth/me", get(handle_me))
         // 插件库管理
         .route("/api/libraries", get(handle_scan_libraries))
         .route("/api/libraries/:name/load", post(handle_load_library))
@@ -1429,4 +1481,114 @@ pub fn host_router() -> Router<SharedState> {
         .route("/plugin-api/:plugin_id/*route", any(handle_plugin_route))
         // CORS
         .layer(CorsLayer::permissive())
+}
+
+// ------------------------------------------------------------------------------------------------
+// 认证初始化辅助函数
+// ------------------------------------------------------------------------------------------------
+
+/// 初始化认证相关数据库表。
+fn init_auth_tables(db: &dyn DatabaseExt) -> crate::error::Result<()> {
+    db.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            token_version INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )?;
+    db.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS tokens (
+            jti TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            expires_at TEXT NOT NULL,
+            revoked_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+    )?;
+    db.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            role TEXT NOT NULL,
+            permission TEXT NOT NULL,
+            plugin_id TEXT NOT NULL,
+            PRIMARY KEY (role, permission)
+        )
+        "#,
+    )?;
+    db.execute("CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id)")?;
+    db.execute("CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at)")?;
+    Ok(())
+}
+
+/// 确保默认管理员存在。
+///
+/// 密码优先级：
+/// 1. 环境变量 `PLUGKIT_ADMIN_PASSWORD`
+/// 2. 随机生成并打印到控制台
+fn ensure_default_admin(db: &dyn DatabaseExt) -> crate::error::Result<()> {
+    let exists = db
+        .query_with(
+            "SELECT id FROM users WHERE username = ?",
+            &[crate::database::DbValue::text("admin")],
+        )?
+        .first()
+        .is_some();
+
+    if exists {
+        return Ok(());
+    }
+
+    let password = std::env::var("PLUGKIT_ADMIN_PASSWORD").unwrap_or_else(|_| {
+        use rand::Rng;
+        let random: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
+        println!("🔐 默认管理员密码（仅显示一次）: {}", random);
+        random
+    });
+
+    let hash = bcrypt::hash(&password, bcrypt::DEFAULT_COST).map_err(|e| {
+        crate::error::Error::from(ErrorKind::DatabaseError(format!(
+            "bcrypt hash failed: {}",
+            e
+        )))
+    })?;
+
+    db.execute_with(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        &[
+            crate::database::DbValue::text("admin"),
+            crate::database::DbValue::text(hash),
+        ],
+    )?;
+
+    // 默认角色权限
+    db.execute_with(
+        "INSERT OR IGNORE INTO role_permissions (role, permission, plugin_id) VALUES (?, ?, ?)",
+        &[
+            crate::database::DbValue::text("admin"),
+            crate::database::DbValue::text("admin:access"),
+            crate::database::DbValue::text("core"),
+        ],
+    )?;
+    db.execute_with(
+        "INSERT OR IGNORE INTO role_permissions (role, permission, plugin_id) VALUES (?, ?, ?)",
+        &[
+            crate::database::DbValue::text("admin"),
+            crate::database::DbValue::text("users:manage"),
+            crate::database::DbValue::text("core"),
+        ],
+    )?;
+
+    println!("✅ 默认管理员 'admin' 已创建");
+    Ok(())
 }
