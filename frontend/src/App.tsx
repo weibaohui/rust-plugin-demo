@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ReactNode, ReactElement } from 'react';
-import { ConfigProvider, Layout, theme, Menu, Card, Button, Tag, Popconfirm, Space, Typography, Alert, App as AntApp } from 'antd';
+import { ConfigProvider, Layout, theme, Menu, Card, Button, Tag, Popconfirm, Space, Typography, Alert, App as AntApp, Dropdown, Avatar } from 'antd';
 import {
   ApiOutlined, FolderOpenOutlined, DownloadOutlined, ReloadOutlined,
   DeleteOutlined, PlayCircleOutlined, PauseCircleOutlined,
-  CaretUpOutlined, CaretDownOutlined
+  CaretUpOutlined, CaretDownOutlined, UserOutlined, LogoutOutlined
 } from '@ant-design/icons';
 import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
 import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 import { useThemeMode } from './theme/use-theme-mode.tsx';
 import { ThemeToggle } from './components/theme-toggle';
+import { isAuthenticated, getUser, logout } from './auth';
+import LoginPage from './LoginPage';
 
 const { Sider, Content } = Layout;
 const { Text, Title } = Typography;
@@ -89,6 +91,7 @@ export default function App(): ReactNode {
   const [libraries, setLibraries] = useState<LibraryInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [authed, setAuthed] = useState(isAuthenticated());
   const { isDark } = useThemeMode();
 
   const refreshPlugins = useCallback(async () => {
@@ -101,13 +104,29 @@ export default function App(): ReactNode {
     catch (e) { setError(`扫描插件库失败: ${e}`); return []; }
   }, []);
 
-  useEffect(() => { refreshPlugins(); refreshLibraries(); }, [refreshPlugins, refreshLibraries]);
+  useEffect(() => {
+    if (authed) {
+      refreshPlugins();
+      refreshLibraries();
+    }
+  }, [refreshPlugins, refreshLibraries, authed]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const origin = window.location.origin;
     registerLoadedPlugins(plugins, origin).catch(err => console.error('qiankun registerLoadedPlugins failed', err));
   }, [plugins]);
+
+  const handleLoginSuccess = () => {
+    setAuthed(true);
+    navigate('/');
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setAuthed(false);
+    navigate('/login');
+  };
 
   const handleLoad = async (name: string) => {
     try {
@@ -271,6 +290,33 @@ export default function App(): ReactNode {
     );
   }
 
+  // 未登录且不在登录页 → 跳转登录
+  if (!authed && routePath !== '/login') {
+    navigate('/login');
+    return null;
+  }
+
+  // 登录页
+  if (routePath === '/login') {
+    if (authed) {
+      navigate('/');
+      return null;
+    }
+    return (
+      <ConfigProvider
+        theme={{
+          algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+          cssVar: { key: isDark ? 'dark' : 'light' },
+          hashed: false,
+        }}
+      >
+        <AntApp>
+          <LoginPage onSuccess={handleLoginSuccess} />
+        </AntApp>
+      </ConfigProvider>
+    );
+  }
+
   return (
     <ConfigProvider
       theme={{
@@ -292,6 +338,26 @@ export default function App(): ReactNode {
             </div>
           </Sider>
           <Layout>
+            <div style={{
+              padding: '12px 16px',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              borderBottom: '1px solid var(--color-border)',
+            }}>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'logout', icon: <LogoutOutlined />, label: '登出', onClick: handleLogout },
+                  ],
+                }}
+              >
+                <Space style={{ cursor: 'pointer' }}>
+                  <Avatar size="small" icon={<UserOutlined />} />
+                  <Text>{getUser()?.username || '用户'}</Text>
+                </Space>
+              </Dropdown>
+            </div>
             <Content style={{ margin: 16, overflow: 'auto' }}>
               {error && <Alert message={error} type="error" closable onClose={() => setError(null)} style={{ marginBottom: 16 }} />}
               {content}

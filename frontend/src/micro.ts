@@ -11,6 +11,7 @@
  */
 import type { PluginInfo } from './api';
 import type { ThemeMode } from './theme/theme-palette';
+import { getToken, getUser } from './auth';
 
 interface QiankunAppEntry {
   name: string;
@@ -92,7 +93,11 @@ export async function registerLoadedPlugins(plugins: PluginInfo[], origin: strin
   themeActions = qiankun.initGlobalState({ themeMode: currentTheme });
 
   qiankun.registerMicroApps(apps, {
-    props: { themeMode: currentTheme },
+    props: {
+      themeMode: currentTheme,
+      token: getToken(),
+      user: getUser(),
+    },
     beforeLoad: [
       async (app: { name: string }) => {
         // eslint-disable-next-line no-console
