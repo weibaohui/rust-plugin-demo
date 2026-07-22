@@ -12,6 +12,8 @@ interface DataRow {
   title: string;
   content: string;
   created_at: string;
+  created_by: string;
+  updated_by: string;
 }
 
 interface PanelProps {
@@ -101,8 +103,22 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      width: 180,
+      width: 160,
       render: (v: string) => <Tag color="blue">{v}</Tag>,
+    },
+    {
+      title: '创建人',
+      dataIndex: 'created_by',
+      key: 'created_by',
+      width: 90,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '编辑人',
+      dataIndex: 'updated_by',
+      key: 'updated_by',
+      width: 90,
+      render: (v: string) => v || '-',
     },
     {
       title: '操作',

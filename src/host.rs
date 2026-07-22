@@ -248,6 +248,10 @@ impl HostApp {
         if !dylibs.is_empty() {
             println!("  ✓ 自动加载 {} 个插件库", dylibs.len());
         }
+
+        // 加载完成后恢复插件状态（Enabled/Running）
+        self.manager.restore_plugin_statuses();
+
         self
     }
 
@@ -520,6 +524,12 @@ pub struct PluginInfo {
     pub menu: Vec<PluginMenu>,
     /// 插件当前生命周期状态。
     pub status: PluginStatus,
+    /// 数据库中已安装的版本（来自 plugkit_plugins 表）。
+    /// None 表示从未安装过（全新插件）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installed_version: Option<String>,
+    /// 是否有可用升级（已安装版本 < 扫描版本 或 预追踪安装）。
+    pub needs_upgrade: bool,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -529,8 +539,15 @@ pub struct PluginInfo {
 /// 把插件转为前端可消费的 [`PluginInfo`]。
 ///
 /// 菜单仅在 `Enabled` / `Running` 状态下对外暴露。
-pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
+pub fn plugin_to_info(
+    p: &dyn Plugin,
+    status: PluginStatus,
+    installed_version: Option<String>,
+) -> PluginInfo {
     let meta = p.metadata();
+    let needs_upgrade = installed_version
+        .as_ref()
+        .map_or(false, |v| v != &meta.version);
     let author = meta.author.clone().unwrap_or_default();
     let description = meta.description.clone().unwrap_or_default();
     // cron 可来自 metadata 声明，也可来自插件的 cron_specs()（动态注册），两者都算
@@ -556,6 +573,8 @@ pub fn plugin_to_info(p: &dyn Plugin, status: PluginStatus) -> PluginInfo {
             .map(|d| format!("/plugin-files/{}/dist/index.html", d)),
         menu,
         status,
+        installed_version,
+        needs_upgrade,
     }
 }
 
@@ -714,6 +733,7 @@ async fn handle_load_library(
                     ctx.manager
                         .plugin_status(id)
                         .unwrap_or(PluginStatus::Loaded),
+                    ctx.manager.installed_version(id),
                 )
             })
         })
@@ -737,6 +757,7 @@ async fn handle_list_plugins(State(state): State<SharedState>) -> Json<Vec<Plugi
                     ctx.manager
                         .plugin_status(p.plugin_id())
                         .unwrap_or(PluginStatus::Loaded),
+                    ctx.manager.installed_version(p.plugin_id()),
                 )
             })
             .collect(),
@@ -761,7 +782,78 @@ async fn handle_get_plugin(
         .manager
         .plugin_status(&id)
         .unwrap_or(PluginStatus::Loaded);
-    Ok(Json(plugin_to_info(&*plugin, status)))
+    Ok(Json(plugin_to_info(
+        &*plugin,
+        status,
+        ctx.manager.installed_version(&id),
+    )))
+}
+
+/// 手动触发插件升级：从 plugkit_plugins 读旧版本 → on_upgrade → 更新版本。
+async fn handle_upgrade_plugin(
+    State(state): State<SharedState>,
+    Path(id): Path<String>,
+) -> Result<Json<PluginInfo>, (StatusCode, Json<ApiMessage>)> {
+    let ctx = state.read().unwrap();
+    let plugin = ctx.manager.get(&id).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            Json(ApiMessage {
+                message: format!("未找到插件 '{}'", id),
+            }),
+        )
+    })?;
+    let new_version = plugin.metadata().version.clone();
+    let old_version = ctx
+        .manager
+        .installed_version(&id)
+        .unwrap_or_else(|| "0.0.0".to_string());
+    let db = ctx.manager.database().ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: "数据库未配置".to_string(),
+            }),
+        )
+    })?;
+
+    info!(
+        "手动升级插件 '{}' 从 {} 到 {}",
+        id, old_version, new_version
+    );
+    plugin.on_upgrade(&*db, &old_version).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiMessage {
+                message: format!("升级失败: {}", e),
+            }),
+        )
+    })?;
+
+    // 更新 plugkit_plugins 表
+    drop(ctx);
+    let mut ctx = state.write().unwrap();
+    if let Some(db) = ctx.manager.database() {
+        let _ = db.execute_with(
+            "UPDATE plugkit_plugins SET version = ?, upgraded_at = datetime('now') WHERE plugin_id = ?",
+            &[
+                crate::database::DbValue::text(&new_version),
+                crate::database::DbValue::text(&id),
+            ],
+        );
+    }
+    drop(ctx);
+
+    let ctx = state.read().unwrap();
+    let status = ctx
+        .manager
+        .plugin_status(&id)
+        .unwrap_or(PluginStatus::Loaded);
+    Ok(Json(plugin_to_info(
+        &*plugin,
+        status,
+        ctx.manager.installed_version(&id),
+    )))
 }
 
 async fn handle_unload_plugin(
@@ -1357,8 +1449,16 @@ async fn handle_plugin_route(
                 let ctx = state.read().unwrap();
                 ctx.auth_service.clone()
             };
+
+            // 从 Authorization header 提取并验证 token，填充 principal
+            let principal = auth_service.as_ref().and_then(|svc| {
+                let auth_header = headers.get(http::header::AUTHORIZATION)?;
+                let token = auth_header.to_str().ok()?.strip_prefix("Bearer ")?;
+                svc.verify_token(token).ok()
+            });
+
             let request_ctx = RequestCtx {
-                principal: None, // 由 auth middleware 填充
+                principal,
                 auth_service: auth_service
                     .unwrap_or_else(|| Arc::new(AuthServiceImpl::new(db_ref.clone()))),
                 db: db_ref,
@@ -1473,6 +1573,7 @@ pub fn host_router() -> Router<SharedState> {
         .route("/api/plugins/:id/stop", post(handle_stop_plugin))
         .route("/api/plugins/:id/cron", get(handle_list_cron))
         .route("/api/plugins/:id/cron/run", post(handle_run_cron))
+        .route("/api/plugins/:id/upgrade", post(handle_upgrade_plugin))
         // 批量操作
         .route("/api/plugins", delete(handle_unload_all))
         // 插件前端 UI 静态文件

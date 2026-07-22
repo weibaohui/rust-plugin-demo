@@ -7,7 +7,7 @@ import {
   CaretUpOutlined, CaretDownOutlined, UserOutlined, LogoutOutlined
 } from '@ant-design/icons';
 import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
-import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin } from './api';
+import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin, upgradePlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 import { useThemeMode } from './theme/use-theme-mode.tsx';
 import { ThemeToggle } from './components/theme-toggle';
@@ -165,6 +165,10 @@ export default function App(): ReactNode {
     try { setError(null); await stopPlugin(id); await refreshPlugins(); }
     catch (e) { setError(`停止失败: ${e}`); }
   };
+  const handleUpgrade = async (id: string) => {
+    try { setError(null); await upgradePlugin(id); await refreshPlugins(); }
+    catch (e) { setError(`升级失败: ${e}`); }
+  };
 
   const routePath = useRoute();
   const pluginRouteMatch = useMemo(() => {
@@ -249,12 +253,20 @@ export default function App(): ReactNode {
                     p.status === 'Running' ? <Popconfirm key="stop" title={`停止 ${p.name}?`} onConfirm={() => handleStop(p.id)}><Button size="small" icon={<CaretDownOutlined />}>停止</Button></Popconfirm> : null,
                     p.status === 'Loaded' ? <Popconfirm key="unload-full" title="完全卸载？插件数据（表、配置）将被永久删除，不可恢复。" onConfirm={() => handleUnload(p.id, false)}><Button danger size="small" icon={<DeleteOutlined />}>完全卸载</Button></Popconfirm> : null,
                     p.status === 'Loaded' ? <Popconfirm key="unload-keep" title="仅卸载？插件将被卸载，但数据（表、配置）会保留，重新加载后即可恢复。" onConfirm={() => handleUnload(p.id, true)}><Button size="small">仅卸载</Button></Popconfirm> : null,
+                    p.needs_upgrade ? <Popconfirm key="upgrade" title={`升级 ${p.name}?`} onConfirm={() => handleUpgrade(p.id)}><Button size="small" type="primary" icon={<ReloadOutlined />}>升级</Button></Popconfirm> : null,
                   ].filter(Boolean)}
                 >
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Space>
                       <Text strong>{p.name}</Text>
                       <Text code>v{p.version}</Text>
+                      {p.installed_version && p.installed_version !== p.version ? (
+                        <Text type="warning" style={{ fontSize: 11 }}>（已安装: v{p.installed_version}）</Text>
+                      ) : p.installed_version ? (
+                        <Text type="success" style={{ fontSize: 11 }}>✓ 已安装</Text>
+                      ) : (
+                        <Text type="secondary" style={{ fontSize: 11 }}>未安装</Text>
+                      )}
                     </Space>
                     {p.author && <Text type="secondary" style={{ fontSize: 12 }}>作者: {p.author}</Text>}
                     {p.description && <Text type="secondary" style={{ fontSize: 12 }} ellipsis>{p.description}</Text>}

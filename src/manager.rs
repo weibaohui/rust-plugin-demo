@@ -470,6 +470,7 @@ impl PluginManager {
                     .into());
                 }
             }
+            self.persist_uninstalled(plugin_name);
         }
         Ok(())
     }
@@ -553,6 +554,7 @@ impl PluginManager {
             .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         plugin.plugin.on_enable()?;
         plugin.status = PluginStatus::Enabled;
+        self.persist_plugin_status(plugin_id, "Enabled");
         Ok(())
     }
 
@@ -647,6 +649,7 @@ impl PluginManager {
             .ok_or_else(|| ErrorKind::PluginNotFound(plugin_id.to_string()))?;
         plugin.plugin.on_disable()?;
         plugin.status = PluginStatus::Loaded;
+        self.persist_plugin_status(plugin_id, "Loaded");
         Ok(())
     }
 
@@ -667,6 +670,7 @@ impl PluginManager {
         }
         plugin.plugin.on_start()?;
         plugin.status = PluginStatus::Running;
+        self.persist_plugin_status(plugin_id, "Running");
         // 优先使用 metadata 声明的 crons
         let meta_crons = plugin.plugin.metadata().crons().to_vec();
         if !meta_crons.is_empty() {
@@ -692,7 +696,102 @@ impl PluginManager {
         }
         plugin.plugin.on_stop()?;
         plugin.status = PluginStatus::Enabled;
+        self.persist_plugin_status(plugin_id, "Enabled");
         Ok(())
+    }
+
+    /// 持久化插件状态到 plugkit_plugins 表。
+    fn persist_plugin_status(&self, plugin_id: &str, status: &str) {
+        if let Some(db) = self.database() {
+            let _ = db.execute_with(
+                "UPDATE plugkit_plugins SET status = ?, upgraded_at = datetime('now') WHERE plugin_id = ?",
+                &[
+                    crate::database::DbValue::text(status),
+                    crate::database::DbValue::text(plugin_id),
+                ],
+            );
+        }
+    }
+
+    /// 标记插件为已卸载（is_installed = 0），重启后 auto_load 自动跳过。
+    fn persist_uninstalled(&self, plugin_id: &str) {
+        if let Some(db) = self.database() {
+            let _ = db.execute_with(
+                "UPDATE plugkit_plugins SET is_installed = 0, upgraded_at = datetime('now') WHERE plugin_id = ?",
+                &[crate::database::DbValue::text(plugin_id)],
+            );
+        }
+    }
+
+    /// 重启后恢复插件状态。
+    ///
+    /// 从 plugkit_plugins 表读取已安装插件的历史状态：
+    /// - `Loaded` → 不操作（默认）
+    /// - `Enabled` → 自动调用 enable
+    /// - `Running` → 自动调用 enable + start
+    ///
+    /// 按拓扑排序执行，确保依赖关系正确。失败时打印警告，不阻断宿主启动。
+    /// 仅在 `auto_load()` 所有插件加载完毕后调用。
+    pub fn restore_plugin_statuses(&mut self) {
+        let db = match self.database() {
+            Some(db) => db,
+            None => return,
+        };
+
+        // 按拓扑排序获取恢复顺序
+        let order = match self.topological_sort() {
+            Ok(o) => o,
+            Err(_) => {
+                let plugins = self.plugins.read().unwrap();
+                plugins.keys().cloned().collect()
+            }
+        };
+
+        for pid in &order {
+            let persisted_status = db
+                .query_with(
+                    "SELECT status FROM plugkit_plugins WHERE plugin_id = ? AND is_installed = 1",
+                    &[crate::database::DbValue::text(pid)],
+                )
+                .ok()
+                .and_then(|rows| rows.first().and_then(|r| r.first().cloned()))
+                .and_then(|v| match v {
+                    crate::database::DbValue::Text(s) => Some(s),
+                    _ => None,
+                });
+
+            match persisted_status.as_deref() {
+                Some("Enabled") | Some("Running") => {
+                    info!("restore_plugin_statuses: auto-enabling '{}'", pid);
+                    if let Err(e) = self.enable_plugin(pid) {
+                        warn!("restore_plugin_statuses: failed to enable '{}': {}", pid, e);
+                    }
+                }
+                _ => {}
+            }
+
+            if persisted_status.as_deref() == Some("Running") {
+                info!("restore_plugin_statuses: auto-starting '{}'", pid);
+                if let Err(e) = self.start_plugin(pid) {
+                    warn!("restore_plugin_statuses: failed to start '{}': {}", pid, e);
+                }
+            }
+        }
+    }
+
+    /// 从 plugkit_plugins 表读取已安装版本。
+    pub fn installed_version(&self, plugin_id: &str) -> Option<String> {
+        let db = self.database()?;
+        db.query_with(
+            "SELECT version FROM plugkit_plugins WHERE plugin_id = ? AND is_installed = 1",
+            &[crate::database::DbValue::text(plugin_id)],
+        )
+        .ok()
+        .and_then(|rows| rows.first().and_then(|r| r.first().cloned()))
+        .and_then(|v| match v {
+            crate::database::DbValue::Text(s) => Some(s),
+            _ => None,
+        })
     }
 
     /// 返回插件当前状态(若存在)。
@@ -897,14 +996,89 @@ impl PluginManager {
         // 获取数据库句柄(未注入时为 no-op 占位)
         let db = self.db_or_noop();
 
+        // 确保插件版本追踪表存在（持久化，重启后不丢失）
+        let _ = db.execute(
+            "CREATE TABLE IF NOT EXISTS plugkit_plugins (
+                plugin_id TEXT PRIMARY KEY,
+                version TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Loaded',
+                is_installed INTEGER NOT NULL DEFAULT 1,
+                installed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                upgraded_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+        );
+
         for plugin in registrar
             .plugins()
             .map_err(|e| Error::from(ErrorKind::PluginRegistration(e)))?
         {
             info!("PluginManager::register_plugins() > calling plugin `on_load`");
+
+            // 从持久化表读取旧版本（进程重启后仍有效），失败时 fallback 到内存 registry
+            let new_version = plugin.metadata().version.clone();
+            let old_version = {
+                let pid = plugin.plugin_id();
+                let persisted = db
+                    .query_with(
+                        "SELECT version FROM plugkit_plugins WHERE plugin_id = ?",
+                        &[crate::database::DbValue::text(pid)],
+                    )
+                    .ok()
+                    .and_then(|rows| rows.first().and_then(|r| r.first().cloned()))
+                    .and_then(|v| match v {
+                        crate::database::DbValue::Text(s) => Some(s),
+                        _ => None,
+                    });
+                persisted.or_else(|| {
+                    registry
+                        .get(pid)
+                        .map(|old| old.plugin.metadata().version.clone())
+                })
+            };
+
+            // 判断是否需要升级：已有版本记录且版本变化，或表已存在但未追踪版本（升级前安装）
+            let needs_upgrade = {
+                let has_old_ver = old_version.as_ref().map_or(false, |v| v != &new_version);
+                let is_pre_tracking = old_version.is_none()
+                    && plugin
+                        .metadata()
+                        .tables()
+                        .iter()
+                        .any(|t| db.has_table(t).unwrap_or(false));
+                if is_pre_tracking {
+                    info!(
+                        "PluginManager::register_plugins() > detected pre-tracking install of '{}', treating as upgrade",
+                        plugin.plugin_id()
+                    );
+                }
+                has_old_ver || is_pre_tracking
+            };
+
             plugin.on_load(&*db)?;
+
+            if needs_upgrade {
+                let from_version = old_version.as_deref().unwrap_or("0.0.0");
+                info!(
+                    "PluginManager::register_plugins() > upgrading '{}' from {} to {}",
+                    plugin.plugin_id(),
+                    from_version,
+                    new_version
+                );
+                plugin.on_upgrade(&*db, from_version)?;
+            }
+
             info!("PluginManager::register_plugins() > calling plugin `on_install`");
             plugin.on_install(&*db)?;
+
+            // 持久化当前版本到 plugkit_plugins 表
+            let _ = db.execute_with(
+                "INSERT OR REPLACE INTO plugkit_plugins (plugin_id, version, status, is_installed, upgraded_at) VALUES (?, ?, 'Loaded', 1, datetime('now'))",
+                &[
+                    crate::database::DbValue::text(plugin.plugin_id()),
+                    crate::database::DbValue::text(&new_version),
+                ],
+            );
+
             if let Some(_) = registry.insert(
                 plugin.plugin_id().to_string(),
                 LoadedPlugin {

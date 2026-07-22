@@ -30,6 +30,18 @@ impl Plugin for DataPlugin {
         eprintln!("[data_plugin] 🔄 unloaded");
         Ok(())
     }
+    fn on_upgrade(&self, db: &dyn DatabaseExt, from_version: &str) -> plugkit::error::Result<()> {
+        eprintln!(
+            "[data_plugin] 🔄 on_upgrade — {} → {}",
+            from_version,
+            env!("CARGO_PKG_VERSION")
+        );
+        // v0.1.0 → v0.2.0: 新增 created_by / updated_by 列
+        db.execute("ALTER TABLE data_items ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")?;
+        db.execute("ALTER TABLE data_items ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''")?;
+        eprintln!("[data_plugin] ✅ 迁移完成：已添加 created_by / updated_by 列");
+        Ok(())
+    }
     fn on_install(&self, db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
         db.validate_table_name("data_items")?;
         db.execute(
@@ -37,7 +49,9 @@ impl Plugin for DataPlugin {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             content TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            updated_by TEXT NOT NULL DEFAULT ''
         )",
         )?;
         eprintln!("[data_plugin] 📦 on_install — 表 data_items 已创建");

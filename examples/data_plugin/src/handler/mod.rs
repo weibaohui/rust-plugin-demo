@@ -22,15 +22,16 @@ pub fn handle_list_items(
 /// POST /items — 创建一条数据记录。
 pub fn handle_create_item(
     _plugin: &dyn Plugin,
-    _ctx: &RequestCtx,
+    ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     let (title, content) = match parse_body(req.body()) {
         Some(v) => v,
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
+    let username = ctx.principal.as_ref().map(|p| p.username.as_str()).unwrap_or("unknown");
     let conn = db::connection();
-    match db::block_on(async { service::create_item(conn, &title, &content).await }) {
+    match db::block_on(async { service::create_item(conn, &title, &content, username).await }) {
         Ok(item) => json_response(StatusCode::CREATED, &serde_json::to_value(item).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
@@ -39,7 +40,7 @@ pub fn handle_create_item(
 /// PUT /items — 更新一条数据记录（ID 从 URI 路径中提取）。
 pub fn handle_update_item(
     _plugin: &dyn Plugin,
-    _ctx: &RequestCtx,
+    ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
     let id = match service::parse_id(req.uri().path()) {
@@ -50,8 +51,9 @@ pub fn handle_update_item(
         Some(v) => v,
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
+    let username = ctx.principal.as_ref().map(|p| p.username.as_str()).unwrap_or("unknown");
     let conn = db::connection();
-    match db::block_on(async { service::update_item(conn, id, &title, &content).await }) {
+    match db::block_on(async { service::update_item(conn, id, &title, &content, username).await }) {
         Ok(item) => json_response(StatusCode::OK, &serde_json::to_value(item).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }

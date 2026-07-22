@@ -39,6 +39,10 @@ export interface PluginInfo {
   menu: PluginMenu[];
   /** 插件当前生命周期状态 */
   status: PluginStatus;
+  /** 数据库中已安装的版本（来自 plugkit_plugins），null 表示全新安装 */
+  installed_version?: string | null;
+  /** 是否有可用升级 */
+  needs_upgrade: boolean;
 }
 
 export async function scanLibraries(): Promise<LibraryInfo[]> {
@@ -120,4 +124,16 @@ export async function runCron(id: string, name: string): Promise<void> {
     body: JSON.stringify({ name }),
   });
   if (!res.ok) throw new Error('执行 cron 失败');
+}
+
+/** 手动升级插件版本 */
+export async function upgradePlugin(id: string): Promise<PluginInfo> {
+  const res = await authFetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/upgrade`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || '升级失败');
+  }
+  return res.json();
 }

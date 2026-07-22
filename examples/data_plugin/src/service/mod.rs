@@ -26,7 +26,7 @@ pub async fn get_item(conn: &DbConn, id: i64) -> Result<Option<model::Model>, St
 }
 
 /// 创建记录。
-pub async fn create_item(conn: &DbConn, title: &str, content: &str) -> Result<model::Model, String> {
+pub async fn create_item(conn: &DbConn, title: &str, content: &str, created_by: &str) -> Result<model::Model, String> {
     let now = chrono::Local::now()
         .format("%Y-%m-%d %H:%M:%S")
         .to_string();
@@ -35,6 +35,8 @@ pub async fn create_item(conn: &DbConn, title: &str, content: &str) -> Result<mo
         title: Set(title.to_string()),
         content: Set(content.to_string()),
         created_at: Set(now),
+        created_by: Set(created_by.to_string()),
+        updated_by: Set(created_by.to_string()),
         ..Default::default()
     };
 
@@ -49,11 +51,13 @@ pub async fn update_item(
     id: i64,
     title: &str,
     content: &str,
+    updated_by: &str,
 ) -> Result<model::Model, String> {
     let item = model::ActiveModel {
         id: Set(id),
         title: Set(title.to_string()),
         content: Set(content.to_string()),
+        updated_by: Set(updated_by.to_string()),
         ..Default::default()
     };
 

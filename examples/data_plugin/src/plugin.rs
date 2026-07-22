@@ -46,6 +46,8 @@ impl DataPlugin {
             title: format!("记录 #{} — 来自 {}", id, ctx.server_name()),
             content: format!("这是由 data_plugin 在 {} 自动生成的示例数据", now),
             created_at: now,
+            created_by: "system".to_string(),
+            updated_by: "system".to_string(),
         }
     }
 }
