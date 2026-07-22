@@ -23,17 +23,39 @@ interface PanelProps {
 
 function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): ReactNode {
   const apiBase = useMemo(() => `/plugin-api/${pluginId}/items`, [pluginId]);
+  const whoamiBase = useMemo(() => `/plugin-api/${pluginId}/whoami`, [pluginId]);
+
+  // 带 token 的 fetch 封装
+  const authedFetch = useCallback((url: string, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    const token = localStorage.getItem('plugkit_token');
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(url, { ...init, headers });
+  }, []);
 
   const [data, setData] = useState<DataRow[]>([]);
+  const [username, setUsername] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<DataRow | null>(null);
   const [form] = Form.useForm();
 
+  const fetchWhoami = useCallback(async () => {
+    try {
+      const res = await authedFetch(whoamiBase);
+      if (res.ok) {
+        const { username: u } = await res.json();
+        setUsername(u);
+      }
+    } catch { /* ignore */ }
+  }, [authedFetch, whoamiBase]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiBase);
+      const res = await authedFetch(apiBase);
       if (res.ok) {
         const list: DataRow[] = await res.json();
         setData(list);
@@ -43,9 +65,9 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
     } finally {
       setLoading(false);
     }
-  }, [apiBase]);
+  }, [authedFetch, apiBase]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchWhoami(); fetchData(); }, [fetchWhoami, fetchData]);
 
   const handleAdd = () => {
     setEditing(null);
@@ -64,7 +86,7 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
       const values = await form.validateFields();
       const url = editing ? `${apiBase}/${editing.id}` : apiBase;
       const method = editing ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await authedFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),
@@ -84,7 +106,7 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
 
   const handleDelete = async (id: number) => {
     try {
-      const res = await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+      const res = await authedFetch(`${apiBase}/${id}`, { method: 'DELETE' });
       if (res.ok) {
         message.success('删除成功');
         fetchData();
@@ -144,10 +166,10 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
   ];
 
   return (
-    <Card title="🗄️ Data Plugin 控制面板" style={{ maxWidth: 960 }}>
+    <Card title={<span>🗄️ Data Plugin 控制面板</span>} style={{ maxWidth: 960 }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>数据记录 (插件: {pluginId})</span>
+          <span>{username ? `${username} 你好 — ` : ''}数据记录 (插件: {pluginId})</span>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增</Button>
         </div>
         <Table

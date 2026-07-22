@@ -9,6 +9,7 @@ use plugkit::plugin::{AuthRequirement, Plugin, PluginRoute, PluginRouteHandler};
 /// 本插件声明的 HTTP 路由列表。
 pub fn routes() -> Vec<PluginRoute> {
     vec![
+        route(Method::GET, "/whoami", handler::handle_whoami, AuthRequirement::Public),
         route(Method::GET, "/items", handler::handle_list_items, AuthRequirement::Public),
         route(Method::POST, "/items", handler::handle_create_item, AuthRequirement::Public),
         route(Method::PUT, "/items", handler::handle_update_item, AuthRequirement::Public),

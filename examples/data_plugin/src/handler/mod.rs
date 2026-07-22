@@ -6,6 +6,16 @@ use plugkit::auth::RequestCtx;
 use plugkit::plugin::Plugin;
 use http::StatusCode;
 
+/// GET /whoami — 返回当前登录用户名。
+pub fn handle_whoami(
+    _plugin: &dyn Plugin,
+    ctx: &RequestCtx,
+    _req: http::Request<Vec<u8>>,
+) -> http::Response<Vec<u8>> {
+    let username = ctx.principal.as_ref().map(|p| p.username.as_str()).unwrap_or("(未登录)");
+    json_response(StatusCode::OK, &serde_json::json!({"username": username}))
+}
+
 /// GET /items — 列出所有数据记录。
 pub fn handle_list_items(
     _plugin: &dyn Plugin,
