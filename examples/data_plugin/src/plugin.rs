@@ -48,6 +48,7 @@ impl DataPlugin {
             created_at: now,
             created_by: "system".to_string(),
             updated_by: "system".to_string(),
+            remark: String::new(),
         }
     }
 }

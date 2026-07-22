@@ -1036,7 +1036,7 @@ impl PluginManager {
                 })
             };
 
-            // 判断是否需要升级：已有版本记录且版本变化，或表已存在但未追踪版本（升级前安装）
+            // 判断是否需要升级：已有版本记录且版本变化，或表已存在但未追踪版本
             let needs_upgrade = {
                 let has_old_ver = old_version.as_ref().map_or(false, |v| v != &new_version);
                 let is_pre_tracking = old_version.is_none()
@@ -1047,8 +1047,16 @@ impl PluginManager {
                         .any(|t| db.has_table(t).unwrap_or(false));
                 if is_pre_tracking {
                     info!(
-                        "PluginManager::register_plugins() > detected pre-tracking install of '{}', treating as upgrade",
+                        "PluginManager::register_plugins() > detected pre-tracking install of '{}'",
                         plugin.plugin_id()
+                    );
+                }
+                if has_old_ver {
+                    info!(
+                        "PluginManager::register_plugins() > upgrade available for '{}': installed={}, current={}",
+                        plugin.plugin_id(),
+                        old_version.as_deref().unwrap_or("?"),
+                        new_version
                     );
                 }
                 has_old_ver || is_pre_tracking
@@ -1056,10 +1064,11 @@ impl PluginManager {
 
             plugin.on_load(&*db)?;
 
+            // 自动执行 on_upgrade（重启/热重载保底，保证代码与 schema 一致）
             if needs_upgrade {
                 let from_version = old_version.as_deref().unwrap_or("0.0.0");
                 info!(
-                    "PluginManager::register_plugins() > upgrading '{}' from {} to {}",
+                    "PluginManager::register_plugins() > auto-upgrading '{}' from {} to {}",
                     plugin.plugin_id(),
                     from_version,
                     new_version
@@ -1070,7 +1079,7 @@ impl PluginManager {
             info!("PluginManager::register_plugins() > calling plugin `on_install`");
             plugin.on_install(&*db)?;
 
-            // 持久化当前版本到 plugkit_plugins 表
+            // 持久化新版本到 plugkit_plugins
             let _ = db.execute_with(
                 "INSERT OR REPLACE INTO plugkit_plugins (plugin_id, version, status, is_installed, upgraded_at) VALUES (?, ?, 'Loaded', 1, datetime('now'))",
                 &[

@@ -25,13 +25,13 @@ pub fn handle_create_item(
     ctx: &RequestCtx,
     req: http::Request<Vec<u8>>,
 ) -> http::Response<Vec<u8>> {
-    let (title, content) = match parse_body(req.body()) {
+    let (title, content, remark) = match parse_body(req.body()) {
         Some(v) => v,
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
     let username = ctx.principal.as_ref().map(|p| p.username.as_str()).unwrap_or("unknown");
     let conn = db::connection();
-    match db::block_on(async { service::create_item(conn, &title, &content, username).await }) {
+    match db::block_on(async { service::create_item(conn, &title, &content, &remark, username).await }) {
         Ok(item) => json_response(StatusCode::CREATED, &serde_json::to_value(item).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
@@ -47,13 +47,13 @@ pub fn handle_update_item(
         Some(id) => id,
         None => return error_response(StatusCode::BAD_REQUEST, "无效的ID"),
     };
-    let (title, content) = match parse_body(req.body()) {
+    let (title, content, remark) = match parse_body(req.body()) {
         Some(v) => v,
         None => return error_response(StatusCode::BAD_REQUEST, "无效的请求体"),
     };
     let username = ctx.principal.as_ref().map(|p| p.username.as_str()).unwrap_or("unknown");
     let conn = db::connection();
-    match db::block_on(async { service::update_item(conn, id, &title, &content, username).await }) {
+    match db::block_on(async { service::update_item(conn, id, &title, &content, &remark, username).await }) {
         Ok(item) => json_response(StatusCode::OK, &serde_json::to_value(item).unwrap()),
         Err(e) => error_response(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
@@ -80,11 +80,12 @@ pub fn handle_delete_item(
 // HTTP 辅助
 // ------------------------------------------------------------------------------------------------
 
-fn parse_body(body: &[u8]) -> Option<(String, String)> {
+fn parse_body(body: &[u8]) -> Option<(String, String, String)> {
     let v: serde_json::Value = serde_json::from_slice(body).ok()?;
     let title = v.get("title").and_then(|s| s.as_str()).unwrap_or("").to_string();
     let content = v.get("content").and_then(|s| s.as_str()).unwrap_or("").to_string();
-    Some((title, content))
+    let remark = v.get("remark").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    Some((title, content, remark))
 }
 
 fn json_response(status: StatusCode, body: &serde_json::Value) -> http::Response<Vec<u8>> {

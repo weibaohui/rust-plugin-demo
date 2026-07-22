@@ -36,10 +36,25 @@ impl Plugin for DataPlugin {
             from_version,
             env!("CARGO_PKG_VERSION")
         );
-        // v0.1.0 → v0.2.0: 新增 created_by / updated_by 列
-        db.execute("ALTER TABLE data_items ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")?;
-        db.execute("ALTER TABLE data_items ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''")?;
-        eprintln!("[data_plugin] ✅ 迁移完成：已添加 created_by / updated_by 列");
+        // 版本迁移：按 from_version 增量执行，重复列自动跳过（幂等）
+        let migrate = |sql: &str| -> plugkit::error::Result<()> {
+            match db.execute(sql) {
+                Ok(_) => Ok(()),
+                Err(e) if e.to_string().contains("duplicate column") => {
+                    eprintln!("[data_plugin] ⏭️ 跳过已存在的列");
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
+        };
+        if from_version == "0.1.0" || from_version == "0.0.0" {
+            migrate("ALTER TABLE data_items ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")?;
+            migrate("ALTER TABLE data_items ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''")?;
+        }
+        if from_version == "0.2.0" || from_version == "0.1.0" || from_version == "0.0.0" {
+            migrate("ALTER TABLE data_items ADD COLUMN remark TEXT NOT NULL DEFAULT ''")?;
+        }
+        eprintln!("[data_plugin] ✅ 迁移完成");
         Ok(())
     }
     fn on_install(&self, db: &dyn DatabaseExt) -> plugkit::error::Result<()> {
@@ -51,7 +66,8 @@ impl Plugin for DataPlugin {
             content TEXT NOT NULL,
             created_at TEXT NOT NULL,
             created_by TEXT NOT NULL DEFAULT '',
-            updated_by TEXT NOT NULL DEFAULT ''
+            updated_by TEXT NOT NULL DEFAULT '',
+            remark TEXT NOT NULL DEFAULT ''
         )",
         )?;
         eprintln!("[data_plugin] 📦 on_install — 表 data_items 已创建");

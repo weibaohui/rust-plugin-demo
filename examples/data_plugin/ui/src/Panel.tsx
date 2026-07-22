@@ -14,6 +14,7 @@ interface DataRow {
   created_at: string;
   created_by: string;
   updated_by: string;
+  remark: string;
 }
 
 interface PanelProps {
@@ -54,7 +55,7 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
 
   const handleEdit = (record: DataRow) => {
     setEditing(record);
-    form.setFieldsValue({ title: record.title, content: record.content });
+    form.setFieldsValue({ title: record.title, content: record.content, remark: record.remark });
     setModalOpen(true);
   };
 
@@ -121,6 +122,13 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
       render: (v: string) => v || '-',
     },
     {
+      title: '备注',
+      dataIndex: 'remark',
+      key: 'remark',
+      ellipsis: true,
+      render: (v: string) => v || '-',
+    },
+    {
       title: '操作',
       key: 'action',
       width: 140,
@@ -165,6 +173,9 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
           </Form.Item>
           <Form.Item name="content" label="内容" rules={[{ required: true, message: '请输入内容' }]}>
             <Input.TextArea rows={4} placeholder="输入内容" />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea rows={2} placeholder="备注信息" />
           </Form.Item>
         </Form>
       </Modal>
