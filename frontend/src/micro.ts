@@ -37,8 +37,8 @@ export function qiankunEntryFor(plugin: PluginInfo, origin: string): string | un
 export function appsForPlugins(plugins: PluginInfo[], origin: string): QiankunAppEntry[] {
   const apps: QiankunAppEntry[] = [];
   for (const p of plugins) {
-    // 仅已启用/运行中的插件注册为子应用
-    if (p.status !== 'Enabled' && p.status !== 'Running') continue;
+    // 仅已启用的插件注册为子应用
+    if (p.status !== 'Enabled') continue;
     const entry = qiankunEntryFor(p, origin);
     if (!entry) continue;
     apps.push({

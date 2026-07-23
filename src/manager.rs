@@ -757,20 +757,13 @@ impl PluginManager {
                     _ => None,
                 });
 
-            match persisted_status.as_deref() {
-                Some("Enabled") | Some("Running") => {
-                    info!("restore_plugin_statuses: auto-enabling '{}'", pid);
-                    if let Err(e) = self.enable_plugin(pid) {
-                        warn!("restore_plugin_statuses: failed to enable '{}': {}", pid, e);
-                    }
-                }
-                _ => {}
-            }
-
-            if persisted_status.as_deref() == Some("Running") {
-                info!("restore_plugin_statuses: auto-starting '{}'", pid);
-                if let Err(e) = self.start_plugin(pid) {
-                    warn!("restore_plugin_statuses: failed to start '{}': {}", pid, e);
+            if matches!(
+                persisted_status.as_deref(),
+                Some("Enabled") | Some("Running")
+            ) {
+                info!("restore_plugin_statuses: auto-enabling '{}'", pid);
+                if let Err(e) = self.enable_plugin(pid) {
+                    warn!("restore_plugin_statuses: failed to enable '{}': {}", pid, e);
                 }
             }
         }

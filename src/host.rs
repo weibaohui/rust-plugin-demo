@@ -252,22 +252,17 @@ impl HostApp {
         // 加载完成后恢复插件状态（Enabled/Running）
         self.manager.restore_plugin_statuses();
 
-        // 为自动恢复的 Enabled/Running 插件注册路由，并启动 cron 任务
+        // 为自动恢复的 Enabled 插件注册路由，并启动 cron 任务
         for p in self.manager.plugins() {
             let status = self.manager.plugin_status(p.plugin_id());
             let pid = p.plugin_id().clone();
 
-            if matches!(
-                status,
-                Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
-            ) {
+            if status == Some(PluginStatus::Enabled) {
                 let routes = p.routes();
                 if !routes.is_empty() {
                     self.active_plugin_routes.insert(pid.clone(), routes);
                 }
-            }
 
-            if status == Some(PluginStatus::Running) {
                 let specs = p.cron_specs();
                 if !specs.is_empty() {
                     let mut flags = Vec::new();
@@ -975,17 +970,46 @@ async fn handle_enable_plugin(
         .enable_plugin(&id)
         .map_err(|e| plugin_err_to_response(e, "启用"))?;
 
-    // 动态注册该插件的路由
-    if let Some(plugin) = ctx.manager.get(&id) {
+    // 注册路由
+    let cron_specs = if let Some(plugin) = ctx.manager.get(&id) {
         let routes = plugin.routes();
         if !routes.is_empty() {
             ctx.active_plugin_routes.insert(id.clone(), routes);
+        }
+        plugin.cron_specs()
+    } else {
+        vec![]
+    };
+
+    // 启动 cron 任务（启用即启动，不再分启动/停止）
+    if !cron_specs.is_empty() {
+        let plugin = ctx.manager.get(&id);
+        if let Some(plugin) = plugin {
+            let mut flags = Vec::new();
+            for spec in cron_specs {
+                let flag = Arc::new(AtomicBool::new(false));
+                let p = plugin.clone();
+                let name = spec.name.clone();
+                let secs = spec.interval_secs;
+                let stop_flag = flag.clone();
+                let _ = tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(Duration::from_secs(secs)).await;
+                        if stop_flag.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        let _ = p.on_cron(&name);
+                    }
+                });
+                flags.push(flag);
+            }
+            ctx.cron_flags.insert(id.clone(), flags);
         }
     }
 
     info!("已启用插件 '{}'", id);
     Ok(Json(ApiMessage {
-        message: format!("插件 '{}' 已启用", id),
+        message: format!("插件 '{}' 已启用（含后台任务）", id),
     }))
 }
 
@@ -1008,74 +1032,7 @@ async fn handle_disable_plugin(
     }
     info!("已禁用插件 '{}'", id);
     Ok(Json(ApiMessage {
-        message: format!("插件 '{}' 已禁用", id),
-    }))
-}
-
-async fn handle_start_plugin(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
-    let cron_specs = {
-        let mut ctx = state.write().unwrap();
-        ctx.manager
-            .start_plugin(&id)
-            .map_err(|e| plugin_err_to_response(e, "启动"))?
-    };
-
-    if !cron_specs.is_empty() {
-        let plugin = {
-            let ctx = state.read().unwrap();
-            ctx.manager.get(&id)
-        };
-        if let Some(plugin) = plugin {
-            let mut flags = Vec::new();
-            for spec in cron_specs {
-                let flag = Arc::new(AtomicBool::new(false));
-                let p = plugin.clone();
-                let name = spec.name.clone();
-                let secs = spec.interval_secs;
-                let stop_flag = flag.clone();
-                let _ = tokio::spawn(async move {
-                    loop {
-                        tokio::time::sleep(Duration::from_secs(secs)).await;
-                        if stop_flag.load(Ordering::Relaxed) {
-                            break;
-                        }
-                        let _ = p.on_cron(&name);
-                    }
-                });
-                flags.push(flag);
-            }
-            let mut ctx = state.write().unwrap();
-            let _ = ctx.cron_flags.insert(id.clone(), flags);
-        }
-    }
-
-    info!("已启动插件 '{}'", id);
-    Ok(Json(ApiMessage {
-        message: format!("插件 '{}' 已启动", id),
-    }))
-}
-
-async fn handle_stop_plugin(
-    State(state): State<SharedState>,
-    Path(id): Path<String>,
-) -> Result<Json<ApiMessage>, (StatusCode, Json<ApiMessage>)> {
-    {
-        let mut ctx = state.write().unwrap();
-        ctx.manager
-            .stop_plugin(&id)
-            .map_err(|e| plugin_err_to_response(e, "停止"))?;
-        if let Some(flags) = ctx.cron_flags.remove(&id) {
-            for f in flags {
-                f.store(true, Ordering::Relaxed);
-            }
-        }
-    }
-    info!("已停止插件 '{}'", id);
-    Ok(Json(ApiMessage {
-        message: format!("插件 '{}' 已停止", id),
+        message: format!("插件 '{}' 已禁用（后台任务已停止）", id),
     }))
 }
 
@@ -1084,7 +1041,7 @@ async fn handle_list_cron(
     Path(id): Path<String>,
 ) -> Result<Json<Vec<CronInfo>>, (StatusCode, Json<ApiMessage>)> {
     let ctx = state.read().unwrap();
-    let running = matches!(ctx.manager.plugin_status(&id), Some(PluginStatus::Running));
+    let enabled = matches!(ctx.manager.plugin_status(&id), Some(PluginStatus::Enabled));
     let plugin = ctx.manager.get(&id).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
@@ -1099,7 +1056,7 @@ async fn handle_list_cron(
         .map(|c| CronInfo {
             name: c.name,
             interval_secs: c.interval_secs,
-            running,
+            running: enabled,
         })
         .collect();
     Ok(Json(crons))
@@ -1631,8 +1588,6 @@ pub fn host_router() -> Router<SharedState> {
         // 插件生命周期状态机
         .route("/api/plugins/:id/enable", post(handle_enable_plugin))
         .route("/api/plugins/:id/disable", post(handle_disable_plugin))
-        .route("/api/plugins/:id/start", post(handle_start_plugin))
-        .route("/api/plugins/:id/stop", post(handle_stop_plugin))
         .route("/api/plugins/:id/cron", get(handle_list_cron))
         .route("/api/plugins/:id/cron/run", post(handle_run_cron))
         .route("/api/plugins/:id/upgrade", post(handle_upgrade_plugin))

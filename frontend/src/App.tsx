@@ -3,11 +3,11 @@ import type { ReactNode, ReactElement } from 'react';
 import { ConfigProvider, Layout, theme, Menu, Card, Button, Tag, Popconfirm, Space, Typography, Alert, App as AntApp, Dropdown, Avatar } from 'antd';
 import {
   ApiOutlined, FolderOpenOutlined, DownloadOutlined, ReloadOutlined,
-  DeleteOutlined, PlayCircleOutlined, PauseCircleOutlined,
-  CaretUpOutlined, CaretDownOutlined, UserOutlined, LogoutOutlined
+  DeleteOutlined, PauseCircleOutlined,
+  CaretUpOutlined, UserOutlined, LogoutOutlined
 } from '@ant-design/icons';
 import type { PluginInfo, LibraryInfo, PluginMenu } from './api';
-import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, startPlugin, stopPlugin, upgradePlugin } from './api';
+import { scanLibraries, listPlugins, loadLibrary, unloadPlugin, unloadAllPlugins, enablePlugin, disablePlugin, upgradePlugin } from './api';
 import { registerLoadedPlugins, qiankunEntryFor } from './micro';
 import { useThemeMode } from './theme/use-theme-mode.tsx';
 import { ThemeToggle } from './components/theme-toggle';
@@ -157,14 +157,6 @@ export default function App(): ReactNode {
     try { setError(null); await disablePlugin(id); await refreshPlugins(); }
     catch (e) { setError(`禁用失败: ${e}`); }
   };
-  const handleStart = async (id: string) => {
-    try { setError(null); await startPlugin(id); await refreshPlugins(); }
-    catch (e) { setError(`启动失败: ${e}`); }
-  };
-  const handleStop = async (id: string) => {
-    try { setError(null); await stopPlugin(id); await refreshPlugins(); }
-    catch (e) { setError(`停止失败: ${e}`); }
-  };
   const handleUpgrade = async (id: string) => {
     try { setError(null); await upgradePlugin(id); await refreshPlugins(); }
     catch (e) { setError(`升级失败: ${e}`); }
@@ -247,10 +239,8 @@ export default function App(): ReactNode {
               return (
                 <Card key={p.id} size="small" hoverable
                   actions={[
-                    p.status === 'Loaded' ? <Popconfirm key="enable" title={`启用 ${p.name}?`} onConfirm={() => handleEnable(p.id)}><Button type="primary" size="small" icon={<CaretUpOutlined />}>启用</Button></Popconfirm> : null,
-                    p.status === 'Enabled' ? <Popconfirm key="start" title={`启动 ${p.name}（后台任务 + cron）?`} onConfirm={() => handleStart(p.id)}><Button type="primary" size="small" icon={<PlayCircleOutlined />}>启动</Button></Popconfirm> : null,
-                    p.status === 'Enabled' ? <Popconfirm key="disable" title={`禁用 ${p.name}?`} onConfirm={() => handleDisable(p.id)}><Button size="small" icon={<PauseCircleOutlined />}>禁用</Button></Popconfirm> : null,
-                    p.status === 'Running' ? <Popconfirm key="stop" title={`停止 ${p.name}?`} onConfirm={() => handleStop(p.id)}><Button size="small" icon={<CaretDownOutlined />}>停止</Button></Popconfirm> : null,
+                    p.status === 'Loaded' ? <Popconfirm key="enable" title={`启用 ${p.name}？（路由 + 后台任务）`} onConfirm={() => handleEnable(p.id)}><Button type="primary" size="small" icon={<CaretUpOutlined />}>启用</Button></Popconfirm> : null,
+                    p.status === 'Enabled' ? <Popconfirm key="disable" title={`禁用 ${p.name}？（将停止后台任务）`} onConfirm={() => handleDisable(p.id)}><Button size="small" icon={<PauseCircleOutlined />}>禁用</Button></Popconfirm> : null,
                     p.status === 'Loaded' ? <Popconfirm key="unload-full" title="完全卸载？插件数据（表、配置）将被永久删除，不可恢复。" onConfirm={() => handleUnload(p.id, false)}><Button danger size="small" icon={<DeleteOutlined />}>完全卸载</Button></Popconfirm> : null,
                     p.status === 'Loaded' ? <Popconfirm key="unload-keep" title="仅卸载？插件将被卸载，但数据（表、配置）会保留，重新加载后即可恢复。" onConfirm={() => handleUnload(p.id, true)}><Button size="small">仅卸载</Button></Popconfirm> : null,
                     p.needs_upgrade ? <Popconfirm key="upgrade" title={`升级 ${p.name}?`} onConfirm={() => handleUpgrade(p.id)}><Button size="small" type="primary" icon={<ReloadOutlined />}>升级</Button></Popconfirm> : null,
@@ -288,9 +278,9 @@ export default function App(): ReactNode {
                       <Text type="secondary" style={{ fontSize: 12 }}>启用</Text>
                       <YesNo value={p.status !== 'Loaded'} />
                       <Text type="secondary" style={{ fontSize: 12 }}>UI嵌入</Text>
-                      <YesNo value={p.has_ui && (p.status === 'Enabled' || p.status === 'Running')} />
-                      <Text type="secondary" style={{ fontSize: 12 }}>Cron运行</Text>
-                      <YesNo value={p.status === 'Running'} />
+                      <YesNo value={p.has_ui && p.status === 'Enabled'} />
+                      <Text type="secondary" style={{ fontSize: 12 }}>后台任务</Text>
+                      <YesNo value={p.has_cron && p.status === 'Enabled'} />
                     </Space>
                   </Space>
                 </Card>

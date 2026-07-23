@@ -10,7 +10,7 @@ export interface LibraryInfo {
   plugin_count: number;
 }
 
-export type PluginStatus = 'Loaded' | 'Enabled' | 'Running';
+export type PluginStatus = 'Loaded' | 'Enabled';
 
 export interface PluginMenu {
   key: string;
@@ -93,16 +93,6 @@ export async function enablePlugin(id: string): Promise<void> {
 export async function disablePlugin(id: string): Promise<void> {
   const res = await authFetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/disable`, { method: 'POST' });
   if (!res.ok) throw new Error('禁用失败');
-}
-
-export async function startPlugin(id: string): Promise<void> {
-  const res = await authFetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/start`, { method: 'POST' });
-  if (!res.ok) throw new Error('启动失败');
-}
-
-export async function stopPlugin(id: string): Promise<void> {
-  const res = await authFetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/stop`, { method: 'POST' });
-  if (!res.ok) throw new Error('停止失败');
 }
 
 export interface CronInfo {
