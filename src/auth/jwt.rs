@@ -56,10 +56,19 @@ impl std::fmt::Debug for JwtService {
 }
 
 impl JwtService {
-    /// 创建新的 JWT 服务，使用随机生成的密钥。
+    /// 创建新的 JWT 服务，密钥优先级：
+    /// 1. 环境变量 `PLUGKIT_JWT_SECRET`
+    /// 2. 固定默认密钥（保障跨重启 token 有效）
     pub fn new() -> Self {
-        let mut secret = [0u8; 32];
-        rand::thread_rng().fill(&mut secret);
+        let secret = std::env::var("PLUGKIT_JWT_SECRET")
+            .map(|s| {
+                let mut key = [0u8; 32];
+                let bytes = s.as_bytes();
+                let len = bytes.len().min(32);
+                key[..len].copy_from_slice(&bytes[..len]);
+                key
+            })
+            .unwrap_or_else(|_| *b"plugkit-default-jwt-secret-2024!");
         Self::from_secret(&secret)
     }
 
@@ -103,5 +112,3 @@ impl JwtService {
         Ok(token_data.claims)
     }
 }
-
-use rand::Rng;

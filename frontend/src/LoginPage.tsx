@@ -44,6 +44,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
             onFinish={onFinish}
             autoComplete="off"
             size="large"
+            initialValues={{ username: 'admin' }}
           >
             <Form.Item
               name="username"

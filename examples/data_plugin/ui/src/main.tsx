@@ -32,9 +32,15 @@ function Shell({ initialMode, props, children }: {
 }
 
 function render(props: Record<string, unknown> = {}) {
-  // 从 qiankun props 读取 token 并暴露到全局变量（Panel 通过 window.__plugkit_token__ 读取）
-  if (typeof props.token === 'string') {
-    (window as any).__plugkit_token__= [redacted]
+  // 从 qiankun props 读取 token 并暴露到全局变量（兼容非 sandbox 环境）
+  const tokenFromProps = typeof props.token === 'string' ? props.token : undefined;
+  const userFromProps = typeof props.user === 'object' && props.user !== null
+    ? props.user as { username?: string }
+    : undefined;
+
+  // 写入全局变量供非 props 路径读取
+  if (tokenFromProps) {
+    (window as any).__plugkit_token__ = tokenFromProps;
   }
 
   const container = document.getElementById('sub-app-container');
@@ -50,12 +56,8 @@ function render(props: Record<string, unknown> = {}) {
 
   const pluginId =
     typeof props.pluginId === 'string' ? props.pluginId : 'data_plugin.DataPlugin';
-  const token =
-    typeof props.token === 'string' ? props.token : undefined;
-  const user =
-    typeof props.user === 'object' && props.user !== null
-      ? props.user as { username?: string }
-      : undefined;
+  const token = tokenFromProps;
+  const user = userFromProps;
 
   root = createRoot(container);
   root.render(

@@ -252,6 +252,21 @@ impl HostApp {
         // 加载完成后恢复插件状态（Enabled/Running）
         self.manager.restore_plugin_statuses();
 
+        // 为自动恢复的 Enabled/Running 插件注册路由
+        for p in self.manager.plugins() {
+            let status = self.manager.plugin_status(p.plugin_id());
+            if matches!(
+                status,
+                Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
+            ) {
+                let routes = p.routes();
+                if !routes.is_empty() {
+                    self.active_plugin_routes
+                        .insert(p.plugin_id().clone(), routes);
+                }
+            }
+        }
+
         self
     }
 

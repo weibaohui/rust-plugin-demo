@@ -738,13 +738,10 @@ impl PluginManager {
             None => return,
         };
 
-        // 按拓扑排序获取恢复顺序
-        let order = match self.topological_sort() {
-            Ok(o) => o,
-            Err(_) => {
-                let plugins = self.plugins.read().unwrap();
-                plugins.keys().cloned().collect()
-            }
+        // 获取所有已注册插件 ID（不依赖拓扑排序，因为插件尚未恢复状态）
+        let order: Vec<String> = {
+            let plugins = self.plugins.read().unwrap();
+            plugins.keys().cloned().collect()
         };
 
         for pid in &order {
@@ -1079,9 +1076,9 @@ impl PluginManager {
             info!("PluginManager::register_plugins() > calling plugin `on_install`");
             plugin.on_install(&*db)?;
 
-            // 持久化新版本到 plugkit_plugins
+            // 持久化新版本到 plugkit_plugins（保留已有的 status，不被 'Loaded' 覆盖）
             let _ = db.execute_with(
-                "INSERT OR REPLACE INTO plugkit_plugins (plugin_id, version, status, is_installed, upgraded_at) VALUES (?, ?, 'Loaded', 1, datetime('now'))",
+                "INSERT INTO plugkit_plugins (plugin_id, version, status, is_installed, upgraded_at) VALUES (?, ?, 'Loaded', 1, datetime('now')) ON CONFLICT(plugin_id) DO UPDATE SET version = EXCLUDED.version, is_installed = 1, upgraded_at = EXCLUDED.upgraded_at",
                 &[
                     crate::database::DbValue::text(plugin.plugin_id()),
                     crate::database::DbValue::text(&new_version),

@@ -26,13 +26,21 @@ interface PanelProps {
 function PanelContent({ pluginId = 'data_plugin.DataPlugin', token, user }: PanelProps): ReactNode {
   const apiBase = useMemo(() => `/plugin-api/${pluginId}/items`, [pluginId]);
 
-  // 带 token 的 fetch 封装（直接使用 props.token）
-  const authedFetch = useCallback((url: string, init?: RequestInit) => {
+  // 带 token 的 fetch 封装，遇到 401 跳转登录页
+  const authedFetch = useCallback(async (url: string, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
+    // 优先使用 props 传入的 token，兜底读全局变量（跨 sandbox 兼容）
+    const tk = token || (typeof window !== 'undefined' ? (window as any).__plugkit_token__ : undefined);
+    if (tk) {
+      headers.set('Authorization', `Bearer ${tk}`);
     }
-    return fetch(url, { ...init, headers });
+    const res = await fetch(url, { ...init, headers });
+    if (res.status === 401) {
+      // 通知宿主跳转登录页
+      window.location.href = '/login';
+      throw new Error('未授权，请重新登录');
+    }
+    return res;
   }, [token]);
 
   const [data, setData] = useState<DataRow[]>([]);
