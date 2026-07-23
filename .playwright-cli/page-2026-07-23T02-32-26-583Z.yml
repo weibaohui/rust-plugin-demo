@@ -1,0 +1,116 @@
+- generic [ref=e1]:
+  - generic [ref=e49]:
+    - complementary [ref=e50]:
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - strong [ref=e54]: plugkit
+          - generic [ref=e55]: v0.2
+        - menu [ref=e56]:
+          - menuitem "api 已加载插件" [ref=e57] [cursor=pointer]:
+            - img "api" [ref=e58]:
+              - img [ref=e59]
+            - generic [ref=e61]: 已加载插件
+          - menuitem "folder-open 插件库管理" [ref=e62] [cursor=pointer]:
+            - img "folder-open" [ref=e63]:
+              - img [ref=e64]
+            - generic [ref=e66]: 插件库管理
+          - menuitem "🗄️ 数据管理" [ref=e67] [cursor=pointer]:
+            - generic: 🗄️
+            - generic [ref=e68]: 数据管理
+        - button "切换到暗色" [ref=e70] [cursor=pointer]:
+          - img "moon" [ref=e72]:
+            - img [ref=e73]
+          - generic [ref=e75]: 暗色模式
+      - img "left" [ref=e77] [cursor=pointer]:
+        - img [ref=e78]
+    - generic [ref=e80]:
+      - generic [ref=e82] [cursor=pointer]:
+        - img "user" [ref=e85]:
+          - img [ref=e86]
+        - generic [ref=e88]: admin
+      - main [ref=e89]:
+        - generic [ref=e382]:
+          - generic [ref=e385]: 🗄️ Data Plugin 控制面板
+          - generic [ref=e387]:
+            - generic [ref=e389]:
+              - generic [ref=e390]: "数据记录 (插件: data_plugin.DataPlugin)"
+              - button "plus 新增" [ref=e391] [cursor=pointer]:
+                - img "plus" [ref=e393]:
+                  - img [ref=e394]
+                - generic [ref=e397]: 新增
+            - table [ref=e405]:
+              - rowgroup [ref=e415]:
+                - row "ID 标题 内容 创建时间 创建人 编辑人 备注 操作" [ref=e416]:
+                  - columnheader "ID" [ref=e417]
+                  - columnheader "标题" [ref=e418]
+                  - columnheader "内容" [ref=e419]
+                  - columnheader "创建时间" [ref=e420]
+                  - columnheader "创建人" [ref=e421]
+                  - columnheader "编辑人" [ref=e422]
+                  - columnheader "备注" [ref=e423]
+                  - columnheader "操作" [ref=e424]
+              - rowgroup [ref=e425]:
+                - row "2 最终验证 用户名正确 2026-07-23 10:31:27 admin admin ok edit 编辑 delete 删除" [ref=e426]:
+                  - cell "2" [ref=e427]
+                  - cell "最终验证" [ref=e428]
+                  - cell "用户名正确" [ref=e429]
+                  - cell "2026-07-23 10:31:27" [ref=e430]:
+                    - generic [ref=e431]: 2026-07-23 10:31:27
+                  - cell "admin" [ref=e432]
+                  - cell "admin" [ref=e433]
+                  - cell "ok" [ref=e434]
+                  - cell "edit 编辑 delete 删除" [ref=e435]:
+                    - generic [ref=e436]:
+                      - button "edit 编辑" [ref=e438] [cursor=pointer]:
+                        - img "edit" [ref=e440]:
+                          - img [ref=e441]
+                        - generic [ref=e443]: 编辑
+                      - button "delete 删除" [ref=e445] [cursor=pointer]:
+                        - img "delete" [ref=e447]:
+                          - img [ref=e448]
+                        - generic [ref=e450]: 删除
+                - row "1 验证token admin正确 2026-07-23 10:25:25 admin admin ok edit 编辑 delete 删除" [ref=e451]:
+                  - cell "1" [ref=e452]
+                  - cell "验证token" [ref=e453]
+                  - cell "admin正确" [ref=e454]
+                  - cell "2026-07-23 10:25:25" [ref=e455]:
+                    - generic [ref=e456]: 2026-07-23 10:25:25
+                  - cell "admin" [ref=e457]
+                  - cell "admin" [ref=e458]
+                  - cell "ok" [ref=e459]
+                  - cell "edit 编辑 delete 删除" [ref=e460]:
+                    - generic [ref=e461]:
+                      - button "edit 编辑" [ref=e463] [cursor=pointer]:
+                        - img "edit" [ref=e465]:
+                          - img [ref=e466]
+                        - generic [ref=e468]: 编辑
+                      - button "delete 删除" [ref=e470] [cursor=pointer]:
+                        - img "delete" [ref=e472]:
+                          - img [ref=e473]
+                        - generic [ref=e475]: 删除
+  - generic [ref=e476]:
+    - dialog "新增记录":
+      - generic [ref=e477]:
+        - button "Close" [ref=e478] [cursor=pointer]:
+          - generic "Close" [ref=e479]:
+            - img "close" [ref=e480]:
+              - img [ref=e481]
+        - generic [ref=e484]: 新增记录
+        - generic [ref=e486]:
+          - generic [ref=e488]:
+            - generic "标题" [ref=e490]: "* 标题"
+            - textbox "* 标题" [ref=e494]:
+              - /placeholder: 输入标题
+          - generic [ref=e496]:
+            - generic "内容" [ref=e498]: "* 内容"
+            - textbox "* 内容" [ref=e502]:
+              - /placeholder: 输入内容
+          - generic [ref=e504]:
+            - generic "备注" [ref=e506]
+            - textbox "备注" [ref=e510]:
+              - /placeholder: 备注信息
+        - generic [ref=e511]:
+          - button "取 消" [ref=e512] [cursor=pointer]:
+            - generic [ref=e513]: 取 消
+          - button "保 存" [ref=e514] [cursor=pointer]:
+            - generic [ref=e515]: 保 存

@@ -1,0 +1,19 @@
+- generic [ref=e7]:
+  - generic [ref=e9]:
+    - heading "plugkit" [level=2] [ref=e10]
+    - text: 插件管理框架
+  - generic [ref=e12]:
+    - generic [ref=e18]:
+      - img "user" [ref=e20]:
+        - img [ref=e21]
+      - textbox "用户名" [ref=e23]: admin
+    - generic [ref=e29]:
+      - img "lock" [ref=e31]:
+        - img [ref=e32]
+      - textbox "密码" [active] [ref=e34]: admin123
+      - button "Show" [ref=e36] [cursor=pointer]:
+        - img "eye-invisible" [ref=e37]:
+          - img [ref=e38]
+    - button "登 录" [ref=e46] [cursor=pointer]:
+      - generic [ref=e47]: 登 录
+  - generic [ref=e48]: "默认用户名: admin，密码见服务端控制台或环境变量 PLUGKIT_ADMIN_PASSWORD"

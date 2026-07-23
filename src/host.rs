@@ -252,17 +252,43 @@ impl HostApp {
         // 加载完成后恢复插件状态（Enabled/Running）
         self.manager.restore_plugin_statuses();
 
-        // 为自动恢复的 Enabled/Running 插件注册路由
+        // 为自动恢复的 Enabled/Running 插件注册路由，并启动 cron 任务
         for p in self.manager.plugins() {
             let status = self.manager.plugin_status(p.plugin_id());
+            let pid = p.plugin_id().clone();
+
             if matches!(
                 status,
                 Some(PluginStatus::Enabled) | Some(PluginStatus::Running)
             ) {
                 let routes = p.routes();
                 if !routes.is_empty() {
-                    self.active_plugin_routes
-                        .insert(p.plugin_id().clone(), routes);
+                    self.active_plugin_routes.insert(pid.clone(), routes);
+                }
+            }
+
+            if status == Some(PluginStatus::Running) {
+                let specs = p.cron_specs();
+                if !specs.is_empty() {
+                    let mut flags = Vec::new();
+                    for spec in specs {
+                        let flag = Arc::new(AtomicBool::new(false));
+                        let plugin = p.clone();
+                        let name = spec.name.clone();
+                        let secs = spec.interval_secs;
+                        let stop_flag = flag.clone();
+                        tokio::spawn(async move {
+                            loop {
+                                tokio::time::sleep(Duration::from_secs(secs)).await;
+                                if stop_flag.load(Ordering::Relaxed) {
+                                    break;
+                                }
+                                let _ = plugin.on_cron(&name);
+                            }
+                        });
+                        flags.push(flag);
+                    }
+                    self.cron_flags.insert(pid.clone(), flags);
                 }
             }
         }
