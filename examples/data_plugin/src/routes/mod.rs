@@ -11,9 +11,9 @@ pub fn routes() -> Vec<PluginRoute> {
     vec![
         route(Method::GET, "/whoami", handler::handle_whoami, AuthRequirement::Public),
         route(Method::GET, "/items", handler::handle_list_items, AuthRequirement::Public),
-        route(Method::POST, "/items", handler::handle_create_item, AuthRequirement::Public),
-        route(Method::PUT, "/items", handler::handle_update_item, AuthRequirement::Public),
-        route(Method::DELETE, "/items", handler::handle_delete_item, AuthRequirement::Public),
+        route(Method::POST, "/items", handler::handle_create_item, AuthRequirement::Authenticated),
+        route(Method::PUT, "/items", handler::handle_update_item, AuthRequirement::Authenticated),
+        route(Method::DELETE, "/items", handler::handle_delete_item, AuthRequirement::Authenticated),
     ]
 }
 

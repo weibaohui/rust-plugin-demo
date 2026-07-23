@@ -33,7 +33,7 @@ use crate::database::DatabaseExt;
 use crate::error::ErrorKind;
 use crate::manager::{PluginManager, PLATFORM_DYLIB_EXTENSION, PLATFORM_DYLIB_PREFIX};
 use crate::metadata::PluginMenu;
-use crate::plugin::{Plugin, PluginStatus};
+use crate::plugin::{AuthRequirement, Plugin, PluginStatus};
 
 use axum::{
     body::Body,
@@ -1471,6 +1471,27 @@ async fn handle_plugin_route(
                 let token = auth_header.to_str().ok()?.strip_prefix("Bearer ")?;
                 svc.verify_token(token).ok()
             });
+
+            // 按路由声明的 AuthRequirement 检查权限
+            match (&route.auth, &principal) {
+                (AuthRequirement::Public, _) => {}
+                (AuthRequirement::Authenticated, Some(_)) => {}
+                (AuthRequirement::Authenticated, None) => {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        Json(serde_json::json!({"error": "unauthorized", "message": "需要登录"})),
+                    )
+                        .into_response();
+                }
+                (AuthRequirement::Permission(perm), Some(p)) => {
+                    if !p.has_permission(perm) {
+                        return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": "forbidden", "message": "权限不足", "required": perm}))).into_response();
+                    }
+                }
+                (AuthRequirement::Permission(perm), None) => {
+                    return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "unauthorized", "message": "需要登录", "required": perm}))).into_response();
+                }
+            }
 
             let request_ctx = RequestCtx {
                 principal,
