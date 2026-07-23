@@ -19,38 +19,30 @@ interface DataRow {
 
 interface PanelProps {
   pluginId?: string;
+  token?: string;
+  user?: { username?: string };
 }
 
-function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): ReactNode {
+function PanelContent({ pluginId = 'data_plugin.DataPlugin', token, user }: PanelProps): ReactNode {
   const apiBase = useMemo(() => `/plugin-api/${pluginId}/items`, [pluginId]);
-  const whoamiBase = useMemo(() => `/plugin-api/${pluginId}/whoami`, [pluginId]);
 
-  // 带 token 的 fetch 封装
+  // 带 token 的 fetch 封装（直接使用 props.token）
   const authedFetch = useCallback((url: string, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
-    const token = localStorage.getItem('plugkit_token') || (window as any).__plugkit_token__;
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }
     return fetch(url, { ...init, headers });
-  }, []);
+  }, [token]);
 
   const [data, setData] = useState<DataRow[]>([]);
-  const [username, setUsername] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<DataRow | null>(null);
   const [form] = Form.useForm();
 
-  const fetchWhoami = useCallback(async () => {
-    try {
-      const res = await authedFetch(whoamiBase);
-      if (res.ok) {
-        const { username: u } = await res.json();
-        setUsername(u);
-      }
-    } catch { /* ignore */ }
-  }, [authedFetch, whoamiBase]);
+  // 用户名直接来自 qiankun props
+  const username = useMemo(() => user?.username || '', [user]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -67,7 +59,7 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
     }
   }, [authedFetch, apiBase]);
 
-  useEffect(() => { fetchWhoami(); fetchData(); }, [fetchWhoami, fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleAdd = () => {
     setEditing(null);

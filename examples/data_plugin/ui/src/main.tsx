@@ -50,12 +50,18 @@ function render(props: Record<string, unknown> = {}) {
 
   const pluginId =
     typeof props.pluginId === 'string' ? props.pluginId : 'data_plugin.DataPlugin';
+  const token =
+    typeof props.token === 'string' ? props.token : undefined;
+  const user =
+    typeof props.user === 'object' && props.user !== null
+      ? props.user as { username?: string }
+      : undefined;
 
   root = createRoot(container);
   root.render(
     <StrictMode>
       <Shell initialMode={initialMode} props={props}>
-        <Panel pluginId={pluginId} />
+        <Panel pluginId={pluginId} token={token} user={user} />
       </Shell>
     </StrictMode>,
   );
