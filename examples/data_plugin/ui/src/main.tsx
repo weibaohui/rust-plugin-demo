@@ -32,6 +32,11 @@ function Shell({ initialMode, props, children }: {
 }
 
 function render(props: Record<string, unknown> = {}) {
+  // 从 qiankun props 读取 token 并暴露到全局变量（Panel 通过 window.__plugkit_token__ 读取）
+  if (typeof props.token === 'string') {
+    (window as any).__plugkit_token__= [redacted]
+  }
+
   const container = document.getElementById('sub-app-container');
   if (!container) return;
 

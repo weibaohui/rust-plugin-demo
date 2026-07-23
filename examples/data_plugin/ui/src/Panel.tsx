@@ -28,7 +28,7 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin' }: PanelProps): Reac
   // 带 token 的 fetch 封装
   const authedFetch = useCallback((url: string, init?: RequestInit) => {
     const headers = new Headers(init?.headers);
-    const token = localStorage.getItem('plugkit_token');
+    const token = localStorage.getItem('plugkit_token') || (window as any).__plugkit_token__;
     if (token) {
       headers.set('Authorization', `Bearer ${token}`);
     }

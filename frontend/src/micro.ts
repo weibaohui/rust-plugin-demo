@@ -92,6 +92,10 @@ export async function registerLoadedPlugins(plugins: PluginInfo[], origin: strin
 
   themeActions = qiankun.initGlobalState({ themeMode: currentTheme });
 
+  // 子应用通过 window.__plugkit_token__ 获取 token（兼容 qiankun 沙箱）
+  const t = getToken();
+  if (t) { (window as any).__plugkit_token__ = t; }
+
   qiankun.registerMicroApps(apps, {
     props: {
       themeMode: currentTheme,
