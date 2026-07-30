@@ -34,9 +34,13 @@ function Shell({ initialMode, props, children }: {
 function render(props: Record<string, unknown> = {}) {
   // 从 qiankun props 读取 token 并暴露到全局变量（兼容非 sandbox 环境）
   const tokenFromProps = typeof props.token === 'string' ? props.token : undefined;
-  const userFromProps = typeof props.user === 'object' && props.user !== null
+  // user 优先用 qiankun props，兜底读全局变量（与 token 同样兼容非 sandbox 环境）
+  const plugkitUser = (typeof window !== 'undefined'
+    ? (window as any).__plugkit_user__
+    : undefined) as { username?: string } | undefined;
+  const userFromProps = (typeof props.user === 'object' && props.user !== null
     ? props.user as { username?: string }
-    : undefined;
+    : (plugkitUser ?? undefined));
 
   // 写入全局变量供非 props 路径读取
   if (tokenFromProps) {

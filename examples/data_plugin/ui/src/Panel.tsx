@@ -3,7 +3,7 @@
  * 通过插件自定义路由 /plugin-api/<pluginId>/items 实现增删改查。
  */
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
-import { Card, Table, Tag, Button, Space, Modal, Form, Input, message, Popconfirm } from 'antd';
+import { Card, Table, Tag, Button, Space, Modal, Form, Input, message, Popconfirm, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { TableColumnsType } from 'antd';
 
@@ -169,7 +169,14 @@ function PanelContent({ pluginId = 'data_plugin.DataPlugin', token, user }: Pane
     <Card title={<span>🗄️ Data Plugin 控制面板</span>} style={{ maxWidth: 960 }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{username ? `${username} 你好 — ` : ''}数据记录 (插件: {pluginId})</span>
+          <Space size="small" wrap>
+            {username ? (
+              <Tag color="green">当前登录用户：{username}</Tag>
+            ) : (
+              <Tag color="default">未登录</Tag>
+            )}
+            <Typography.Text type="secondary">数据记录 (插件: {pluginId})</Typography.Text>
+          </Space>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增</Button>
         </div>
         <Table

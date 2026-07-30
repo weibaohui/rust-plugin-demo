@@ -319,6 +319,8 @@ export default function App(): ReactNode {
     );
   }
 
+  const user = getUser();
+
   return (
     <ConfigProvider
       theme={{
@@ -343,22 +345,44 @@ export default function App(): ReactNode {
             <div style={{
               padding: '12px 16px',
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
               alignItems: 'center',
               borderBottom: '1px solid var(--color-border)',
             }}>
-              <Dropdown
-                menu={{
-                  items: [
-                    { key: 'logout', icon: <LogoutOutlined />, label: '登出', onClick: handleLogout },
-                  ],
-                }}
-              >
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Text strong style={{ color: 'var(--color-primary)' }}>plugkit</Text>
+                <Tag style={{ marginLeft: 8 }}>v0.2</Tag>
+                {user && (
+                  <Space size="small" style={{ marginLeft: 16 }}>
+                    <Avatar size="small" icon={<UserOutlined />} />
+                    <Text strong>{user.username}</Text>
+                    {user.roles.length > 0 && (
+                      <Tag color="processing" style={{ fontSize: 12 }}>
+                        {user.roles.join('，')}
+                      </Tag>
+                    )}
+                  </Space>
+                )}
+              </div>
+              {user ? (
+                <Dropdown
+                  menu={{
+                    items: [
+                      { key: 'logout', icon: <LogoutOutlined />, label: '登出', onClick: handleLogout },
+                    ],
+                  }}
+                >
+                  <Space style={{ cursor: 'pointer' }}>
+                    <Avatar size="small" icon={<UserOutlined />} />
+                    <Text>{user.username}</Text>
+                  </Space>
+                </Dropdown>
+              ) : (
                 <Space style={{ cursor: 'pointer' }}>
                   <Avatar size="small" icon={<UserOutlined />} />
-                  <Text>{getUser()?.username || '用户'}</Text>
+                  <Text>用户</Text>
                 </Space>
-              </Dropdown>
+              )}
             </div>
             <Content style={{ margin: 16, overflow: 'auto' }}>
               {error && <Alert message={error} type="error" closable onClose={() => setError(null)} style={{ marginBottom: 16 }} />}
