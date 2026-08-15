@@ -120,3 +120,9 @@ pub mod event_bus;
 
 /// 认证模块：JWT 登录、权限校验、请求上下文。
 pub mod auth;
+
+/// Phase 2 (Cordis 风格) — 服务容器与 DI 注入。
+///
+/// 提供 `Service` trait、`ServiceStore` 类型擦除容器、`Context` DI 容器。
+/// plugin 可选实现 `inject_deps()` 声明依赖，通过 `ctx.get::<T>(name)` 拿服务。
+pub mod service;

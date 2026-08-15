@@ -79,6 +79,13 @@ pub struct PluginManager {
     /// 宿主注入的数据库操作接口,生命周期钩子调用时传递给插件。
     /// `None` 时钩子收到一个 no-op 的占位实现(便于无 DB 的简单用例)。
     database: Option<Arc<dyn DatabaseExt>>,
+    /// **Phase 2（Cordis 风格）** — DI 上下文。
+    ///
+    /// 加载 plugin 时调用 `inject_deps()` 检查依赖，并把 ctx 通过
+    /// `set_context(Weak<Context>)` 传给 plugin。
+    ///
+    /// `None` 时不启用 DI 注入（向后兼容）。
+    di_ctx: Option<Arc<crate::service::Context>>,
 }
 
 #[cfg(target_os = "macos")]
@@ -221,6 +228,7 @@ impl Default for PluginManager {
             registration_fn_name: PLUGIN_REGISTRATION_FN_NAME.to_vec(),
             plugins: Default::default(),
             database: None,
+            di_ctx: None,
         }
     }
 }
@@ -242,6 +250,35 @@ impl PluginManager {
             registration_fn_name: PLUGIN_REGISTRATION_FN_NAME.to_vec(),
             plugins: Default::default(),
             database: None,
+            di_ctx: None,
+        }
+    }
+
+    /// **Phase 2（Cordis 风格）** — 设置 DI 上下文。
+    ///
+    /// 一旦设置，加载 plugin 时会：
+    ///   1. 调 `inject_deps()` 检查依赖是否已在 ctx 中提供
+    ///   2. 通过 `set_context(Weak<Context>)` 把 ctx 传给 plugin
+    ///
+    /// 不调用此方法 = 不启用 DI（向后兼容）。
+    pub fn with_di_context(mut self, ctx: Arc<crate::service::Context>) -> Self {
+        self.di_ctx = Some(ctx);
+        self
+    }
+
+    /// **Phase 2（Cordis 风格）** — 获取 DI 上下文引用（若有）。
+    pub fn di_context(&self) -> Option<&Arc<crate::service::Context>> {
+        self.di_ctx.as_ref()
+    }
+
+    /// **Phase 2（Cordis 风格）** — 检查 plugin 注入依赖。
+    ///
+    /// 返回缺失的服务列表（空 = 全部满足）。在没有 DI ctx 时返回 plugin 声明的全部依赖。
+    pub fn check_plugin_deps(&self, plugin: &dyn crate::plugin::Plugin) -> Vec<String> {
+        let deps = plugin.inject_deps();
+        match &self.di_ctx {
+            Some(ctx) => ctx.check_inject_deps(deps),
+            None => deps.iter().map(|s| s.to_string()).collect(),
         }
     }
 
@@ -1292,5 +1329,100 @@ mod tests {
             db.has_table("a_items").unwrap(),
             "a_items should be preserved (keep_data=true)"
         );
+    }
+
+    // =================================================================
+    // Phase 2 集成测试 — DI 注入闭环
+    // =================================================================
+
+    use crate::plugin::Plugin;
+    use crate::service::{Context, Service};
+
+    /// 测试用 plugin：声明依赖 "test_db"
+    #[derive(Debug)]
+    struct TestPluginWithDeps {
+        id: String,
+    }
+
+    impl Plugin for TestPluginWithDeps {
+        fn plugin_id(&self) -> &String {
+            &self.id
+        }
+        fn inject_deps(&self) -> &[&str] {
+            &["test_db", "test_logger"]
+        }
+    }
+
+    /// 测试用 plugin：无依赖（向后兼容）
+    #[derive(Debug)]
+    struct TestPluginNoDeps {
+        id: String,
+    }
+
+    impl Plugin for TestPluginNoDeps {
+        fn plugin_id(&self) -> &String {
+            &self.id
+        }
+        // inject_deps 默认返回 &[]
+    }
+
+    /// 测试用 service
+    #[derive(Debug)]
+    struct TestDb {
+        url: String,
+    }
+    // Service 自动 blanket impl（无需手写）
+
+    #[test]
+    fn test_di_check_plugin_deps_with_all_provided() {
+        let ctx = Context::new();
+        ctx.provide_as("test_db", Arc::new(TestDb { url: "sqlite://x".into() }));
+        ctx.provide_as("test_logger", Arc::new(42u32));
+
+        let mgr = PluginManager::default().with_di_context(Arc::new(ctx));
+        let p = TestPluginWithDeps { id: "p1".into() };
+        let missing = mgr.check_plugin_deps(&p);
+        assert!(missing.is_empty(), "expected no missing deps, got: {:?}", missing);
+    }
+
+    #[test]
+    fn test_di_check_plugin_deps_missing_one() {
+        let ctx = Context::new();
+        ctx.provide_as("test_db", Arc::new(TestDb { url: "sqlite://x".into() }));
+        // 故意不提供 test_logger
+
+        let mgr = PluginManager::default().with_di_context(Arc::new(ctx));
+        let p = TestPluginWithDeps { id: "p2".into() };
+        let missing = mgr.check_plugin_deps(&p);
+        assert_eq!(missing, vec!["test_logger".to_string()]);
+    }
+
+    #[test]
+    fn test_di_no_deps_passes() {
+        let ctx = Context::new();
+        let mgr = PluginManager::default().with_di_context(Arc::new(ctx));
+        let p = TestPluginNoDeps { id: "p3".into() };
+        let missing = mgr.check_plugin_deps(&p);
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn test_di_no_context_returns_all_declared() {
+        // 没设置 di_ctx 时，check_plugin_deps 返回 plugin 声明的全部依赖
+        let mgr = PluginManager::default();
+        let p = TestPluginWithDeps { id: "p4".into() };
+        let missing = mgr.check_plugin_deps(&p);
+        assert_eq!(missing.len(), 2);
+    }
+
+    #[test]
+    fn test_di_di_context_accessor() {
+        let ctx = Arc::new(Context::new());
+        let mgr = PluginManager::default().with_di_context(ctx.clone());
+        assert!(mgr.di_context().is_some());
+
+        // 默认无 ctx
+        let mgr2 = PluginManager::default();
+        assert!(mgr2.di_context().is_none());
     }
 }

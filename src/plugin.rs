@@ -192,6 +192,41 @@ pub trait Plugin: Debug + Sync + Send {
         PluginMetadata::new(self.plugin_id(), self.plugin_id(), "0.0.0")
     }
 
+    /// **Phase 2（Cordis 风格）** — 声明此插件依赖哪些服务。
+    ///
+    /// 返回服务 key 列表（如 `&["database", "logger"]`）。宿主加载插件时会
+    /// 调用 `Context::check_inject_deps` 验证依赖是否已注册，缺失则报错。
+    ///
+    /// **默认实现**返回空切片（无依赖），与现有 plugin 完全兼容。
+    ///
+    /// # Cordis 借鉴
+    ///
+    /// 对应 Cordis 中 plugin 上的 `inject?: Inject` 字段（数组形式）。
+    ///
+    /// # 示例
+    ///
+    /// ```ignore
+    /// impl Plugin for MyPlugin {
+    ///     fn inject_deps(&self) -> &[&str] { &["news_feed", "cache"] }
+    /// }
+    /// ```
+    fn inject_deps(&self) -> &[&str] {
+        &[]
+    }
+
+    /// **Phase 2（Cordis 风格）** — 接收宿主注入的 DI Context。
+    ///
+    /// 宿主加载 plugin 后（`on_load` 之前）调用此方法，把可访问 ctx 传给 plugin。
+    /// plugin 在 `on_load` 之后可通过 `self.ctx()` 拿 ctx，再 `ctx.get::<T>(name)` 拿服务。
+    ///
+    /// **默认实现** no-op（现有 plugin 无感知）。
+    ///
+    /// # 重要
+    ///
+    /// `ctx` 是 `Weak<Context>`（弱引用），避免 plugin 持有 ctx 造成循环引用。
+    /// plugin 每次使用要 `upgrade()` 一次。
+    fn set_context(&self, _ctx: std::sync::Weak<crate::service::Context>) {}
+
     /// 由插件管理器在注册过程完成后调用。默认 no-op。
     ///
     /// `db` 为宿主传递的数据库操作接口,插件可据此初始化表结构。
