@@ -132,3 +132,10 @@ pub mod service;
 /// 提供 `HmrWatcher`：监听 `.dylib` 文件变化，触发用户回调。
 /// 回调里决定是否重新加载 plugin（unload → reload）。
 pub mod hmr;
+
+/// Phase 4 (Cordis 风格) — Effect 自动 dispose + PluginGroup 批量管理。
+///
+/// 提供 `Effect` trait、`EffectStack`、`PluginGroup` trait、`PluginManagerExt`。
+/// plugin 可用 `EffectStack` 收集可逆副作用，卸载时自动清理；
+/// 多个 plugin 可打包成 `PluginGroup` 一次注册（Bevy 风格）。
+pub mod effect;
