@@ -126,3 +126,9 @@ pub mod auth;
 /// 提供 `Service` trait、`ServiceStore` 类型擦除容器、`Context` DI 容器。
 /// plugin 可选实现 `inject_deps()` 声明依赖，通过 `ctx.get::<T>(name)` 拿服务。
 pub mod service;
+
+/// Phase 3 (Cordis 风格) — HMR（Hot Module Replacement）热重载。
+///
+/// 提供 `HmrWatcher`：监听 `.dylib` 文件变化，触发用户回调。
+/// 回调里决定是否重新加载 plugin（unload → reload）。
+pub mod hmr;
