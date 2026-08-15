@@ -25,6 +25,11 @@ rusqlite = { version = "0.29", features = ["bundled"] }
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"], optional = true }
 
+# Cordis-style 核心（DI + Effect + Event + HMR）
+cordis-rs-core = { path = "../cordis-rs/crates/core" }
+cordis-rs-event = { path = "../cordis-rs/crates/event" }
+cordis-rs-hmr = { path = "../cordis-rs/crates/hmr" }
+
 # host 模块依赖（通用插件宿主能力）
 axum = { version = "0.7", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
